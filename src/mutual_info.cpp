@@ -50,26 +50,31 @@ PointCloud::Ptr map_pcl (new PointCloud);
 PointCloud::Ptr free_pcl (new PointCloud);
 PointCloud::Ptr vsn_pcl (new PointCloud);
 
-struct Kinect {
+struct SensorModel {
     double horizontal_fov;
-    double angle_inc;
+    double vertical_fov;
+    double angle_inc_hor;
+    double angle_inc_vel;
     double width;
     double height;
     double max_range;
     vector<pair<double, double>> pitch_yaws;
 
-    Kinect(double _width, double _height, double _horizontal_fov, double _max_range)
-            : width(_width), height(_height), horizontal_fov(_horizontal_fov), max_range(_max_range) {
-        angle_inc = horizontal_fov / width;
+    SensorModel(double _width, double _height, double _horizontal_fov, double _vertical_fov, double _max_range)
+            : width(_width), height(_height), horizontal_fov(_horizontal_fov), vertical_fov(_vertical_fov), max_range(_max_range) {
+        angle_inc_hor = horizontal_fov / width;
+        angle_inc_vel = vertical_fov / height;
         for(double i = -width / 2; i < width / 2; ++i) {
             for(double j = -height / 2; j < height / 2; ++j) {
-                pitch_yaws.push_back(make_pair(j * angle_inc, i * angle_inc));
+                pitch_yaws.push_back(make_pair(j * angle_inc_vel, i * angle_inc_hor));
             }
         }
     }
 }; 
-Kinect InitialScan(1000, 1000, 6.0, 15.0);
-Kinect kinect(640, 40, 3.047198, 15.0);
+
+SensorModel InitialScan(1000, 1000, 6.0, 1.0, 15.0);
+SensorModel kinect(640, 40, 3.047198, 1.5, 5.0);
+SensorModel Velodyne_puck(3600, 16, 2*PI, 2/9*PI, 100.0 );
 
 double get_free_volume(const octomap::OcTree *octree) {
     double volume = 0;
@@ -196,16 +201,16 @@ void RPY2Quaternion(double roll, double pitch, double yaw, double *x, double *y,
     *z = cr2*cp2*sy2 - sr2*sp2*cy2;
 }
 
-void octomap_callback(const octomap_msgs::Octomap::ConstPtr &octomap_msg) {
-        octomap::OcTree *octomap_load = dynamic_cast<octomap::OcTree *>(octomap_msgs::msgToMap(*octomap_msg));
-        octomap_load->setResolution(0.2);
-        // octomap::OcTree tree(0.2);
-        // octomap::OcTree *octomap_curr = &tree;
-        // auto octree_copy = new octomap::OcTree(*octomap_load);
-        tree = octomap_load;
-        octomap_flag = true;
-        cout << "msg got !" << endl;
-}
+// void octomap_callback(const octomap_msgs::Octomap::ConstPtr &octomap_msg) {
+//         octomap::OcTree *octomap_load = dynamic_cast<octomap::OcTree *>(octomap_msgs::msgToMap(*octomap_msg));
+//         octomap_load->setResolution(0.2);
+//         // octomap::OcTree tree(0.2);
+//         // octomap::OcTree *octomap_curr = &tree;
+//         // auto octree_copy = new octomap::OcTree(*octomap_load);
+//         tree = octomap_load;
+//         octomap_flag = true;
+//         cout << "msg got !" << endl;
+// }
 
 void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
     // kinect_flag = 1;
@@ -249,9 +254,9 @@ int main(int argc, char **argv) {
     ros::NodeHandle nh;
     // Initial sub topic
     ros::Subscriber octomap_sub;
-    ros::Subscriber kinect_sub;
+    ros::Subscriber lidar_sub;
     // octomap_sub = nh.subscribe<octomap_msgs::Octomap>("/octomap_binary", 10, octomap_callback);
-    kinect_sub = nh.subscribe<sensor_msgs::PointCloud2>("/velodyne_points", 1, velodyne_callbacks);
+    lidar_sub = nh.subscribe<sensor_msgs::PointCloud2>("/velodyne_points", 1, velodyne_callbacks);
     
     Map_pcl_pub = nh.advertise<PointCloud>("Current_Map", 1);
     VScan_pcl_pub = nh.advertise<PointCloud>("virtual_Scans", 1);
@@ -341,6 +346,7 @@ int main(int argc, char **argv) {
         max_idx = 0;
 
         // Calculate Mutual Information
+        #pragma omp parallel for
         for(int i = 0; i < candidates.size(); ++i) 
         {
             auto c = candidates[i];
