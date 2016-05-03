@@ -207,7 +207,7 @@ void octomap_callback(const octomap_msgs::Octomap::ConstPtr &octomap_msg) {
         cout << "msg got !" << endl;
 }
 
-void kinect_callback( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
+void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
     // kinect_flag = 1;
     pcl::PCLPointCloud2 cloud2;
     pcl_conversions::toPCL(*cloud2_msg, cloud2);
@@ -251,7 +251,7 @@ int main(int argc, char **argv) {
     ros::Subscriber octomap_sub;
     ros::Subscriber kinect_sub;
     // octomap_sub = nh.subscribe<octomap_msgs::Octomap>("/octomap_binary", 10, octomap_callback);
-    kinect_sub = nh.subscribe<sensor_msgs::PointCloud2>("/camera/depth/points", 1, kinect_callback);
+    kinect_sub = nh.subscribe<sensor_msgs::PointCloud2>("/velodyne_points", 1, velodyne_callbacks);
     
     Map_pcl_pub = nh.advertise<PointCloud>("Current_Map", 1);
     VScan_pcl_pub = nh.advertise<PointCloud>("virtual_Scans", 1);
@@ -260,7 +260,7 @@ int main(int argc, char **argv) {
     tf_listener = new tf::TransformListener();
     tf::StampedTransform transform;
 
-    map_pcl->header.frame_id = "/camera_depth_optical_frame";
+    map_pcl->header.frame_id = "/velodyne";
     map_pcl->height = 1;
     map_pcl->width = 0;
 
@@ -289,7 +289,7 @@ int main(int argc, char **argv) {
 
     // Get the current localization from tf
     try{
-    tf_listener->lookupTransform("/map", "/base_footprint",  
+    tf_listener->lookupTransform("/map", "/base_link",  
     ros::Time(0), transform);
     position = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
     cout << "Current Robot Position : " << position << " yaw : " << transform.getRotation().w() << endl;
@@ -303,7 +303,7 @@ int main(int argc, char **argv) {
     for (int ini_i = 0; ini_i < 6; ini_i++)
     {
         try{
-        tf_listener->lookupTransform("/map", "/base_footprint",  
+        tf_listener->lookupTransform("/map", "/base_link",  
         ros::Time(0), transform);
         position = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
         // cout << "Current Robot Position : " << position << " yaw : " << transform.getRotation().w() << endl;
@@ -387,7 +387,7 @@ int main(int argc, char **argv) {
 
         // Get the current localization from tf
         try{
-        tf_listener->lookupTransform("/map", "/base_footprint",  
+        tf_listener->lookupTransform("/map", "/base_link",  
         ros::Time(0), transform);
         position = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
         cout << "Update current Position : " << position << endl;
@@ -407,7 +407,7 @@ int main(int argc, char **argv) {
             for (int ini_i = 0; ini_i < 6; ini_i++)
             {
             try{
-            tf_listener->lookupTransform("/map", "/base_footprint",  
+            tf_listener->lookupTransform("/map", "/base_link",  
             ros::Time(0), transform);
             position = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
             // cout << "Current Robot Position : " << position << " yaw : " << transform.getRotation().w() << endl;
