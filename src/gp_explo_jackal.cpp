@@ -305,20 +305,6 @@ int main(int argc, char **argv) {
         ros::spinOnce();
     }
 
-    // RPY2Quaternion(0, 0, 2, &qx, &qy, &qz, &qw);
-    // arrived = goToDest(position, qx, qy, qz, qw);
-    // cout << "make initial observation.." << endl;
-    //     ros::spinOnce();
-    // // RPY2Quaternion(0, 0, 3, &qx, &qy, &qz, &qw);
-    // arrived = goToDest(position, qx, qy, qz, qw);
-    // cout << "make initial observation.. ." << endl;
-    //     ros::spinOnce();
-    // // RPY2Quaternion(0, 0, 4, &qx, &qy, &qz, &qw);
-    // arrived = goToDest(position, qx, qy, qz, qw);
-    // cout << "make initial observation.. .." << endl;
-    //     ros::spinOnce();
-
-
     double before = get_free_volume(cur_tree);
     cout << "CurMap  Entropy : " << get_free_volume(cur_tree) << endl;
 
@@ -329,7 +315,7 @@ int main(int argc, char **argv) {
         vector<double> MIs(candidates.size());
         max_idx = 0;
 
-        // Calculate Mutual Information
+        // for every candidate...
         #pragma omp parallel for
         for(int i = 0; i < candidates.size(); ++i) 
         {
@@ -339,29 +325,15 @@ int main(int argc, char **argv) {
             if (!n)     continue;
             if(n->getOccupancy() > free_prob)       continue;
 
-            high_resolution_clock::time_point t1 = high_resolution_clock::now();
+            // Evaluate Mutual Information
             eu2dr.rotate_IP(c.second.roll(), c.second.pitch(), c.second.yaw() );
             vector<point3d> hits = cast_sensor_rays(cur_tree, c.first, eu2dr);
-            high_resolution_clock::time_point t2 = high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
-            cout << "Time on ray cast: " << duration << endl;
-
-            t1 = high_resolution_clock::now();
             MIs[i] = calc_MI(cur_tree, c.first, hits, before);
-            t2 = high_resolution_clock::now();
-            duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
-            cout << "Candidate : " << c.first << "  **  MI: " << MIs[i] << endl;
 
             // Pick the Best Candidate
             if (MIs[i] > MIs[max_idx])
             {
                 max_idx = i;
-                // vsn_pcl->clear();
-                // for (auto h : hits) {
-                //     vsn_pcl->points.push_back(pcl::PointXYZ(h.x()/5.0, h.y()/5.0, h.z()/5.0));
-                //     vsn_pcl->width++;
-                // }
-                // VScan_pcl_pub.publish(vsn_pcl);
             }
 
         }
@@ -377,10 +349,8 @@ int main(int argc, char **argv) {
 
         // Get the current localization from tf
         try{
-        tf_listener->lookupTransform("/map", "/base_link",  
-        ros::Time(0), transform);
+        tf_listener->lookupTransform("/map", "/base_link", ros::Time(0), transform);
         position = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
-        cout << "Update current Position : " << position << endl;
         }
         catch (tf::TransformException ex){
         ROS_ERROR("%s",ex.what());
@@ -396,10 +366,8 @@ int main(int argc, char **argv) {
             for (int ini_i = 0; ini_i < 6; ini_i++)
             {
             try{
-            tf_listener->lookupTransform("/map", "/base_link",  
-            ros::Time(0), transform);
+            tf_listener->lookupTransform("/map", "/base_link", ros::Time(0), transform);
             position = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
-            // cout << "Current Robot Position : " << position << " yaw : " << transform.getRotation().w() << endl;
             }
             catch (tf::TransformException ex){
             ROS_ERROR("%s",ex.what());
