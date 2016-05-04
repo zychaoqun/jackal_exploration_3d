@@ -155,8 +155,9 @@ vector<point3d> cast_sensor_rays(const octomap::OcTree *octree, const point3d &p
 }
 
 vector<pair<point3d, point3d>> generate_candidates(point3d position) {
-    double R = 0.5;   // Robot step, in meters.
+    double R = 1;   // Robot step, in meters.
     double n = 10;
+    int counter = 0;
 
     vector<pair<point3d, point3d>> candidates;
     double z = position.z();                // fixed 
@@ -168,7 +169,10 @@ vector<pair<point3d, point3d>> generate_candidates(point3d position) {
             x = position.x() + R * cos(yaw);
             y = position.y() + R * sin(yaw);
             candidates.push_back(make_pair<point3d, point3d>(point3d(x, y, z), point3d(0, pitch, yaw)));
+            counter++;
         }
+
+    cout << "Generate Candidates : " << counter << endl;
     return candidates;
 }
 
@@ -176,7 +180,7 @@ double calc_MI(const octomap::OcTree *octree, const point3d &position, const vec
     auto octree_copy = new octomap::OcTree(*octree);
 
     for(const auto h : hits) {
-        octree_copy->insertRay(position, h, kinect.max_range);
+        octree_copy->insertRay(position, h, Velodyne_puck.max_range);
     }
     octree_copy->updateInnerOccupancy();
     double after = get_free_volume(octree_copy);
@@ -213,14 +217,13 @@ void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
 
     map_pcl->clear();
     // map_pcl->header.frame_id = "/camera_depth_frame";
-    for (int i = 1; i < cloud->height; i++)
         for (int j = 1; j< cloud->width; j++)
         {
-            if(isnan(cloud->at(j,i).x)) continue;
+            if(isnan(cloud->at(j).x)) continue;
             cur_tree->insertRay(point3d( position.x(),position.y(),z_sensor), 
-                point3d(cloud->at(j,i).x, cloud->at(j,i).y, cloud->at(j,i).z), kinect.max_range);
+                point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), Velodyne_puck.max_range);
             // add the point into map
-            map_pcl->points.push_back(pcl::PointXYZ(cloud_local->at(j,i).x, cloud_local->at(j,i).y, cloud_local->at(j,i).z));
+            map_pcl->points.push_back(pcl::PointXYZ(cloud_local->at(j).x, cloud_local->at(j).y, cloud_local->at(j).z));
             map_pcl->width++;
         }
         map_pcl->height = 1;
@@ -276,34 +279,24 @@ int main(int argc, char **argv) {
 
  
     // Get the current localization from tf
-    try{
-    tf_listener->lookupTransform("/map", "/base_link", ros::Time(0), transform);
-    position = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+        for (int ini_i = 0; ini_i < 4; ini_i++)
+    {
+        try{
+        tf_listener->lookupTransform("/map", "/base_link", ros::Time(0), transform);
+        position = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+        }
+        catch (tf::TransformException ex){
+        ROS_ERROR("%s",ex.what());
+        }
     }
-    catch (tf::TransformException ex){
-    ROS_ERROR("%s",ex.what());
-    }
-    cout << "Initial  Position : " << position << " Heading : " << transform.getRotation().w() << endl;
+    cout << "Initial  Position : " << position << " Heading : " << transform.getRotation().getAngle() << endl;
 
     double qx, qy, qz, qw;
     RPY2Quaternion(0, 0, 1, &qx, &qy, &qz, &qw);
 
     // Initial Scan
-    for (int ini_i = 0; ini_i < 6; ini_i++)
-    {
-        try{
-        tf_listener->lookupTransform("/map", "/base_link",  
-        ros::Time(0), transform);
-        position = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
-        // cout << "Current Robot Position : " << position << " yaw : " << transform.getRotation().w() << endl;
-        }
-        catch (tf::TransformException ex){
-        ROS_ERROR("%s",ex.what());
-        }
-        bool arrived = goToDest(position, qx, qy, qz, qw);
-        cout << "make initial observation.. " << ini_i << "." << endl;
-        ros::spinOnce();
-    }
+    ros::spinOnce();
+
 
     double before = get_free_volume(cur_tree);
     cout << "CurMap  Entropy : " << get_free_volume(cur_tree) << endl;
@@ -335,17 +328,16 @@ int main(int argc, char **argv) {
             {
                 max_idx = i;
             }
-
         }
 
         // Send the Robot 
         cout << "Sending the Goal : " << candidates[max_idx].first << " , Yaw : " << candidates[max_idx].second.yaw() << endl;
         RPY2Quaternion(0, 0, candidates[max_idx].second.yaw(), &qx, &qy, &qz, &qw);
 
-        dif_pos = point3d(candidates[max_idx].first.x()-position.x(), 
-            candidates[max_idx].first.y()-position.y(), 
-            candidates[max_idx].first.z()-position.z()  );
-        bool arrived = goToDest(dif_pos, qx, qy, qz, qw);
+        // dif_pos = point3d(candidates[max_idx].first.x()-position.x(), 
+        //     candidates[max_idx].first.y()-position.y(), 
+        //     candidates[max_idx].first.z()-position.z()  );
+        bool arrived = goToDest(candidates[max_idx].first, qx, qy, qz, qw);
 
         // Get the current localization from tf
         try{
@@ -362,20 +354,20 @@ int main(int argc, char **argv) {
           {
             cout << "We made one step forward" << endl;
             // Updating octomap with kinect call back.
-            RPY2Quaternion(0, 0, 1, &qx, &qy, &qz, &qw);
-            for (int ini_i = 0; ini_i < 6; ini_i++)
-            {
-            try{
-            tf_listener->lookupTransform("/map", "/base_link", ros::Time(0), transform);
-            position = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
-            }
-            catch (tf::TransformException ex){
-            ROS_ERROR("%s",ex.what());
-            }
-            bool arrived = goToDest(position, qx, qy, qz, qw);
-            cout << "make more observation.. " << ini_i << "." << endl;
-            ros::spinOnce();
-            }
+            // RPY2Quaternion(0, 0, 1, &qx, &qy, &qz, &qw);
+            // for (int ini_i = 0; ini_i < 6; ini_i++)
+            // {
+            // try{
+            // tf_listener->lookupTransform("/map", "/base_link", ros::Time(0), transform);
+            // position = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+            // }
+            // catch (tf::TransformException ex){
+            // ROS_ERROR("%s",ex.what());
+            // }
+            // bool arrived = goToDest(position, qx, qy, qz, qw);
+            // cout << "make more observation.. " << ini_i << "." << endl;
+            // ros::spinOnce();
+            // }
                 ros::spinOnce();
             // position = candidates[max_idx].first;
           }
