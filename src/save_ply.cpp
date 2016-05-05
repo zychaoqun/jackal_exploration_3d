@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
     ros::NodeHandle nh;
 
     ros::Subscriber point_map_sub;
-    point_map_sub = nh.subscribe<sensor_msgs::PointCloud2>("/point_map", 1, point_cloud_callback);
+    point_map_sub = nh.subscribe<sensor_msgs::PointCloud2>("/velodyne_points", 1, point_cloud_callback);
     ros::spin();
 
     return 0;

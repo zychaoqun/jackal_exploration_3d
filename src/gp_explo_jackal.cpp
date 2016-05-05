@@ -20,6 +20,7 @@
 #include <octomap_msgs/GetOctomap.h>
 #include <tf/transform_broadcaster.h>
 #include "navigation_utils.h"
+#include "laser_geometry/laser_geometry.h"
 
 
 using namespace std;
@@ -36,6 +37,7 @@ octomap::OcTree* cur_tree;
 bool octomap_flag = 0; // 0 : msg not received
 bool kinect_flag = 0; // 0 : msg not received
 tf::TransformListener *tf_listener; 
+laser_geometry::LaserProjection projector;
    
 point3d position;
 // point3d orientation;
@@ -70,7 +72,9 @@ struct SensorModel {
     }
 }; 
 
-SensorModel Velodyne_puck(3600, 16, 2*PI, 2/9*PI, 100.0 );
+// SensorModel Velodyne_puck(3600, 16, 2*PI, 2/9*PI, 100.0 );
+SensorModel Velodyne_puck(3600, 3, 2*PI, 0.1, 100.0 );
+
 
 double get_free_volume(const octomap::OcTree *octree) {
     double volume = 0;
@@ -81,17 +85,17 @@ double get_free_volume(const octomap::OcTree *octree) {
     return volume;
 }
 
-void get_free_points(const octomap::OcTree *octree, PointCloud::Ptr pclPtr) {
+// void get_free_points(const octomap::OcTree *octree, PointCloud::Ptr pclPtr) {
     
-    for(octomap::OcTree::leaf_iterator n = octree->begin_leafs(octree->getTreeDepth()); n != octree->end_leafs(); ++n) {
-        if(!octree->isNodeOccupied(*n))
-        {
-            pclPtr->points.push_back(pcl::PointXYZ(n.getX()/5.0, n.getY()/5.0, n.getZ()/5.0));
-            pclPtr->width++;
-        }
-    }
-    return;
-}
+//     for(octomap::OcTree::leaf_iterator n = octree->begin_leafs(octree->getTreeDepth()); n != octree->end_leafs(); ++n) {
+//         if(!octree->isNodeOccupied(*n))
+//         {
+//             pclPtr->points.push_back(pcl::PointXYZ(n.getX()/5.0, n.getY()/5.0, n.getZ()/5.0));
+//             pclPtr->width++;
+//         }
+//     }
+//     return;
+// }
 
 
 vector<point3d> cast_sensor_rays(const octomap::OcTree *octree, const point3d &position,
@@ -121,7 +125,7 @@ vector<point3d> cast_sensor_rays(const octomap::OcTree *octree, const point3d &p
 }
 
 vector<pair<point3d, point3d>> generate_candidates(point3d position) {
-    double R = 1;   // Robot step, in meters.
+    double R = 0.3;   // Robot step, in meters.
     double n = 10;
     int counter = 0;
     octomap::OcTreeNode *n_cur;
@@ -184,9 +188,9 @@ void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
     pcl::fromPCLPointCloud2(cloud2,*cloud_local);
 
     pcl_ros::transformPointCloud("/map", *cloud_local, *cloud, *tf_listener);
-
+    cout << "here" << endl;
     map_pcl->clear();
-    // map_pcl->header.frame_id = "/camera_depth_frame";
+    map_pcl->header.frame_id = "/explo_points";
 
     // Add the lidar measurement into Octomap
     // #pragma omp parallel for
@@ -205,10 +209,26 @@ void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
     // delete octree_copy;
     map_pcl->header.stamp = ros::Time::now().toNSec() / 1e3;
     Map_pcl_pub.publish(map_pcl);
-    cout << "Updating current map in pcl (points): " << map_pcl->width << endl;
+
+    cur_tree->writeBinary("test.bt");
     delete cloud;
     delete cloud_local;
 }
+
+// void hokuyo_callbacks(const sensor_msgs::LaserScan::ConstPtr& scan_in)
+// {
+//     sensor_msgs::PointCloud cloud;
+//     projector.transformLaserScanToPointCloud("base_link",*scan_in, cloud,tf_listener);
+
+//     // Do something with cloud.
+//     for (int j = 1; j< cloud->width; j++)
+//     {
+//         if(isnan(cloud->at(j).x)) continue;
+//         cur_tree->insertRay(point3d( position.x(),position.y(),z_sensor), 
+//             point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), Velodyne_puck.max_range);
+//     }
+//     cout << "Map  Entropy after laser scan : " << get_free_volume(cur_tree) << endl;
+// }
 
 int main(int argc, char **argv) {
     ros::init(argc, argv, "Info_Exploration_Octomap");
@@ -218,9 +238,12 @@ int main(int argc, char **argv) {
     // ros::Subscriber octomap_sub;
     // octomap_sub = nh.subscribe<octomap_msgs::Octomap>("/octomap_binary", 10, octomap_callback);
 
-    ros::Subscriber lidar_sub;
-    lidar_sub = nh.subscribe<sensor_msgs::PointCloud2>("/velodyne_points", 1, velodyne_callbacks);
+    ros::Subscriber velodyne_sub;
+    velodyne_sub = nh.subscribe<sensor_msgs::PointCloud2>("/velodyne_points", 2, velodyne_callbacks);
     
+    // ros::Subscriber hokuyo_sub;
+    // hokuyo_sub = nh.subscribe<sensor_msgs::PointCloud2>("/scan", 1, hokuyo_callbacks);
+
     tf_listener = new tf::TransformListener();
     tf::StampedTransform transform;
 
@@ -240,23 +263,29 @@ int main(int argc, char **argv) {
     vsn_pcl->height = 1;
     vsn_pcl->width = 0;
    
+    double qx, qy, qz, qw;
+    RPY2Quaternion(0, 0, 1, &qx, &qy, &qz, &qw);
+
+
     // Initialize parameters 
-    // ros::Rate r(1); // 10 hz
+    ros::Rate r(100); // 1 hz
     int max_idx = 0;
 
     position = point3d(0, 0, 0.0);
     // point3d dif_pos = point3d(0,0,0);
     point3d eu2dr(1, 0, 0);
     octomap::OcTreeNode *n;
-    octomap::OcTree new_tree(0.1);
+    octomap::OcTree new_tree(0.2);
     cur_tree = &new_tree;
 
     // Get the current localization from tf
-    for (int ini_i = 0; ini_i < 4; ini_i++)
+    bool find_tf = false;
+    while (!find_tf)
     {
         try{
         tf_listener->lookupTransform("/map", "/base_link", ros::Time(0), transform);
         position = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+        find_tf = true;
         }
         catch (tf::TransformException ex){
         ROS_ERROR("%s",ex.what());
@@ -264,8 +293,9 @@ int main(int argc, char **argv) {
     }
     cout << "Initial  Position : " << position << " Heading : " << transform.getRotation().getAngle() << endl;
 
-    double qx, qy, qz, qw;
-    RPY2Quaternion(0, 0, 1, &qx, &qy, &qz, &qw);
+    point3d next_vp(position.x()+0.1, position.y(),position.z());
+    RPY2Quaternion(0, 0, 0, &qx, &qy, &qz, &qw);
+    bool arrived = goToDest(next_vp, qx, qy, qz, qw);
 
     // Update latest localization
     try{
@@ -301,13 +331,15 @@ int main(int argc, char **argv) {
             vector<point3d> hits = cast_sensor_rays(cur_tree, c.first, eu2dr);
             MIs[i] = calc_MI(cur_tree, c.first, hits, before);
 
+            cout << "X." << i << ". .";
             // Pick the Best Candidate
             if (MIs[i] > MIs[max_idx])
             {
                 max_idx = i;
             }
         }
-
+        cout << endl;
+        cout << "Max MI : " << MIs[max_idx] << endl;
         // Send the Robot 
         cout << "Sending the Goal : " << candidates[max_idx].first << " , Yaw : " << candidates[max_idx].second.yaw() << endl;
         RPY2Quaternion(0, 0, candidates[max_idx].second.yaw(), &qx, &qy, &qz, &qw);

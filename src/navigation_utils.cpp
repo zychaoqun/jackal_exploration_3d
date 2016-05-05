@@ -65,12 +65,12 @@ int main(int argc, char** argv){
   double qx, qy, qz, qw;
   RPY2Quaternion(0, 0, 1, &qx, &qy, &qz, &qw);
 
-  point3d go_posi(0.0,0.0,0);
-  bool arrived = goToDest(go_posi, qx, qy, qz, qw);
+  point3d posi1(1.0,0.0,0);
+  bool arrived = goToDest(posi1, qx, qy, qz, qw);
 
-     // go_posi = point3d(-0.5,0.0,0);
+  posi1 = point3d(0.0,0.0,0);
   RPY2Quaternion(0, 0, -1, &qx, &qy, &qz, &qw);
-   arrived = goToDest(go_posi, qx, qy, qz, qw);
+   arrived = goToDest(posi1, qx, qy, qz, qw);
 
    //   go_posi = point3d(0.2,0.1,0);
    // arrived = goToDest(go_posi, 0, 0, 0, 1.0);
