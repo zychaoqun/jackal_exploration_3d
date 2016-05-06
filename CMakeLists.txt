@@ -134,6 +134,8 @@ add_executable(simu_explo           src/explo_octo_3d_node.cpp src/gpregressor.c
 add_executable(simu_gazebo          src/simu_gazebo.cpp)
 add_executable(save_to_ply          src/save_ply.cpp)
 add_executable(isam_ros             src/isam_example.cpp)
+add_executable(scan_to_pcl          src/scan_to_pcl.cpp)
+
 
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
@@ -167,6 +169,10 @@ target_link_libraries(navigation
 )
 
 target_link_libraries(save_to_ply
+  ${catkin_LIBRARIES}
+)
+
+target_link_libraries(scan_to_pcl
   ${catkin_LIBRARIES}
 )
 
