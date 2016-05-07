@@ -21,20 +21,20 @@
 using namespace std;
 // using namespace std::chrono;
 
+ros::Publisher pcl_from_scan;
+
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
 laser_geometry::LaserProjection projector;
 
 void hokuyo_callbacks(const sensor_msgs::LaserScan::ConstPtr& scan_in)
 {
-    sensor_msgs::PointCloud cloud;
-    // PointCloud::Ptr cloud (new PointCloud);
-    // PointCloud cloud;
+    sensor_msgs::PointCloud2 cloud;
     projector.projectLaser(*scan_in, cloud);
 
     // Publish the new point cloud.
-    // cloud->header.frame_id = "/laser";
-    // cloud->header.stamp = ros::Time::now().toNSec() / 1e3;
-    // pcl_from_scan.publish(cloud);
+    cloud.header.frame_id = "/laser";
+    cloud.header.stamp = ros::Time::now();
+    pcl_from_scan.publish(cloud);
 }
 
 int main(int argc, char **argv) {
@@ -42,10 +42,15 @@ int main(int argc, char **argv) {
     ros::NodeHandle nh;
 
     ros::Subscriber hokuyo_sub;
-    hokuyo_sub = nh.subscribe<sensor_msgs::LaserScan>("/scan", 2, hokuyo_callbacks);
+    hokuyo_sub = nh.subscribe<sensor_msgs::LaserScan>("/scan", 1, hokuyo_callbacks);
 
-    ros::Publisher pcl_from_scan;
+    
     pcl_from_scan = nh.advertise<PointCloud>("hokuyo_points", 1);
+
+    while (ros::ok())
+    {
+        ros::spin();
+    }
 
     nh.shutdown();          
     return 0;
