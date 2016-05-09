@@ -247,7 +247,7 @@ int main(int argc, char **argv) {
     velodyne_sub = nh.subscribe<sensor_msgs::PointCloud2>("/velodyne_points", 1, velodyne_callbacks);
     
     ros::Subscriber hokuyo_sub;
-    hokuyo_sub = nh.subscribe<sensor_msgs::PointCloud2>("/scan", 1, hokuyo_callbacks);
+    hokuyo_sub = nh.subscribe<sensor_msgs::PointCloud2>("/hokuyo_points", 1, hokuyo_callbacks);
 
     tf_listener = new tf::TransformListener();
     tf::StampedTransform transform;
