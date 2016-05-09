@@ -22,7 +22,7 @@ my_catkin_workspace$ catkin_make
 ```
 $ roscore
 $ rosrun octomap_server octomap_server_node *.bt
-$ rosrun explo_3d_node mutual_info
+$ rosrun explo_3d_node explo*
 ```
 
 ### Who do I talk to? ###
