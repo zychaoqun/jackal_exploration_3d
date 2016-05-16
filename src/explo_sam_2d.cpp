@@ -72,7 +72,7 @@ struct SensorModel {
 }; 
 
 // SensorModel Velodyne_puck(3600, 16, 2*PI, 2/9*PI, 100.0 );
-SensorModel Velodyne_puck(3600, 16, 2*PI, 0.523, 100.0 );
+SensorModel Velodyne_puck(3600, 2, 2*PI, 0.00523, 100.0 );
 
 
 double get_free_volume(const octomap::OcTree *octree) {
@@ -241,8 +241,6 @@ void hokuyo_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg )
 int main(int argc, char **argv) {
     ros::init(argc, argv, "Info_Exploration_Octomap");
     ros::NodeHandle nh;
-
-
     // ros::Subscriber octomap_sub;
     // octomap_sub = nh.subscribe<octomap_msgs::Octomap>("/octomap_binary", 10, octomap_callback);
 
@@ -304,8 +302,8 @@ int main(int argc, char **argv) {
     }
     cout << "Initial  Position : " << position << " Heading : " << transform.getRotation().getAngle() << endl;
 
-    point3d next_vp(position.x()+0.1, position.y(),position.z());
-    RPY2Quaternion(0, 0, 0, &qx, &qy, &qz, &qw);
+    point3d next_vp(position.x(), position.y(),position.z());
+    RPY2Quaternion(0, 0, 0.5, &qx, &qy, &qz, &qw);
     bool arrived = goToDest(next_vp, qx, qy, qz, qw);
 
     // Update latest localization
@@ -316,6 +314,22 @@ int main(int argc, char **argv) {
       catch (tf::TransformException ex){
       ROS_ERROR("%s",ex.what());
     }
+    // Initial Scan
+    ros::spinOnce();
+
+    RPY2Quaternion(0, 0, 1.0, &qx, &qy, &qz, &qw);
+    arrived = goToDest(next_vp, qx, qy, qz, qw);
+
+    // Update latest localization
+    try{
+        tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
+        position = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+    }
+      catch (tf::TransformException ex){
+      ROS_ERROR("%s",ex.what());
+    }
+    // Initial Scan
+    ros::spinOnce();
 
     // Visualize current position
     RPY2Quaternion(0, 0, transform.getRotation().getAngle(), &qx, &qy, &qz, &qw);
@@ -344,7 +358,7 @@ int main(int argc, char **argv) {
     // JackalMarker_pub.publish( jackal_frame );
 
     // Initial Scan
-    ros::spinOnce();
+    // ros::spinOnce();
 
     while (ros::ok())
     {
@@ -408,7 +422,7 @@ int main(int argc, char **argv) {
         // Send the Robot 
         cout << "Sending the Goal : " << candidates[max_idx].first << " , Yaw : " << candidates[max_idx].second.yaw() << endl;
         
-        bool arrived = goToDest(candidates[max_idx].first, qx, qy, qz, qw);
+        arrived = goToDest(candidates[max_idx].first, qx, qy, qz, qw);
 
         // cout << "Current Robot Location : " << position << endl;
         if(arrived)
