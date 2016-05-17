@@ -45,7 +45,7 @@ bool goToDest(point3d go_posi, double qx, double qy, double qz, double qw) {
   goal.target_pose.pose.orientation.z = qz;
   goal.target_pose.pose.orientation.w = qw;
 
-  ROS_INFO("Sending goal");
+  ROS_INFO("Sending goal to (%3.2f, %3.2f, %3.2f)", go_posi.x(), go_posi.y(), go_posi.z());
   ac.sendGoal(goal);
 
   ac.waitForResult();
