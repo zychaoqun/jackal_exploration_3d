@@ -36,6 +36,8 @@ octomap::OcTree* cur_tree;
 bool octomap_flag = 0; // 0 : msg not received
 bool kinect_flag = 0; // 0 : msg not received
 tf::TransformListener *tf_listener; 
+
+
 // laser_geometry::LaserProjection projector;
    
 point3d position;
@@ -125,7 +127,7 @@ vector<point3d> cast_sensor_rays(const octomap::OcTree *octree, const point3d &p
 }
 
 vector<pair<point3d, point3d>> generate_candidates(point3d position) {
-    double R = 1.0;   // Robot step, in meters.
+    double R = 0.5;   // Robot step, in meters.
     double n = 5;
     int counter = 0;
     octomap::OcTreeNode *n_cur;
@@ -245,7 +247,7 @@ void hokuyo_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg )
 }
 
 int main(int argc, char **argv) {
-    ros::init(argc, argv, "Explo_Octomap_DA_2d");
+    ros::init(argc, argv, "explo_octomap_da_2d");
     ros::NodeHandle nh;
     // ros::Subscriber octomap_sub;
     // octomap_sub = nh.subscribe<octomap_msgs::Octomap>("/octomap_binary", 10, octomap_callback);
@@ -257,9 +259,9 @@ int main(int argc, char **argv) {
     ros::Publisher GoalMarker_pub = nh.advertise<visualization_msgs::Marker>( "Goal_Marker", 0 );
     ros::Publisher JackalMarker_pub = nh.advertise<visualization_msgs::Marker>( "Jackal_Marker", 0 );
 
-    octomap_pub = nh.advertise<octomap_msgs::Octomap>( "Octomap_explo ", 0);
+    // octomap_pub = nh.advertise<octomap_msgs::Octomap>( "Octomap_explo ", 0);
 
-    // tf_listener = new tf::TransformListener();
+    tf_listener = new tf::TransformListener();
     tf::StampedTransform transform;
 
     Map_pcl_pub = nh.advertise<PointCloud>("Current_Map", 1);
@@ -306,9 +308,9 @@ int main(int argc, char **argv) {
     //     ROS_ERROR("%s",ex.what());
     //     }
     // }
-
     // Update the initial location of the robot
    while(!tf_listener->waitForTransform("/map", "/laser", ros::Time(0), ros::Duration(1.0)));
+// cout << "hello" << endl;
 
    try{
         tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
