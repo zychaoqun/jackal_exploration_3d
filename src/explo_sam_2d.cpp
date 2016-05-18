@@ -14,6 +14,7 @@
 #include <ros/ros.h>
 #include <pcl_ros/point_cloud.h>
 #include <visualization_msgs/Marker.h>
+#include <visualization_msgs/MarkerArray.h>
 #include <geometry_msgs/Pose.h>
 #include <octomap_msgs/Octomap.h>
 #include <octomap_msgs/conversions.h>
@@ -21,6 +22,7 @@
 // #include <tf/transform_broadcaster.h>
 #include "navigation_utils.h"
 // #include "laser_geometry/laser_geometry.h"
+#include <ros/callback_queue.h>
 
 
 using namespace std;
@@ -31,16 +33,19 @@ typedef pcl::PointXYZ PointType;
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
 const double PI = 3.1415926;
 const double free_prob = 0.3;
+const double octo_reso = 0.1;
 
 octomap::OcTree* cur_tree;
+octomap_msgs::Octomap cur_tree_msg;
 bool octomap_flag = 0; // 0 : msg not received
 bool kinect_flag = 0; // 0 : msg not received
 tf::TransformListener *tf_listener; 
+int octomap_seq = 0;
 
 
 // laser_geometry::LaserProjection projector;
    
-point3d position;
+point3d position, laser_orig, velo_orig;
 // point3d orientation;
 
 ros::Publisher Map_pcl_pub;
@@ -126,21 +131,21 @@ vector<point3d> cast_sensor_rays(const octomap::OcTree *octree, const point3d &p
     return hits;
 }
 
-vector<pair<point3d, point3d>> generate_candidates(point3d position) {
+vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig) {
     double R = 0.5;   // Robot step, in meters.
     double n = 5;
     int counter = 0;
     octomap::OcTreeNode *n_cur;
 
     vector<pair<point3d, point3d>> candidates;
-    double z = position.z();                // fixed 
+    double z = sensor_orig.z();                // fixed 
     double pitch = 0;                   // fixed
     double x, y;
 
-    // for(z = position.z() - 1; z <= position.z() + 1; z += 1)
+    // for(z = sensor_orig.z() - 1; z <= sensor_orig.z() + 1; z += 1)
         for(double yaw = 0; yaw < 2 * PI; yaw += PI / n) {
-            x = position.x() + R * cos(yaw);
-            y = position.y() + R * sin(yaw);
+            x = sensor_orig.x() + R * cos(yaw);
+            y = sensor_orig.y() + R * sin(yaw);
             n_cur = cur_tree->search(point3d(x,y,z));
             if(!n_cur)                                  continue;
             if(n_cur->getOccupancy() > free_prob)       continue;
@@ -148,16 +153,16 @@ vector<pair<point3d, point3d>> generate_candidates(point3d position) {
             counter++;
         }
 
-    cout << "Candidates : " << counter << endl;
+    ROS_INFO("Candidates : %d", counter);
     return candidates;
 }
 
-double calc_MI(const octomap::OcTree *octree, const point3d &position, const vector<point3d> &hits, const double before) {
+double calc_MI(const octomap::OcTree *octree, const point3d &sensor_orig, const vector<point3d> &hits, const double before) {
     auto octree_copy = new octomap::OcTree(*octree);
 
     // #pragma omp parallel for
     for(const auto h : hits) {
-        octree_copy->insertRay(position, h, Velodyne_puck.max_range);
+        octree_copy->insertRay(sensor_orig, h, Velodyne_puck.max_range);
     }
     octree_copy->updateInnerOccupancy();
     double after = get_free_volume(octree_copy);
@@ -194,11 +199,10 @@ void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
     // map_pcl->header.frame_id = "/explo_points";
 
     // Insert points into octomap one by one...
-    // #pragma omp parallel for
     for (int j = 1; j< cloud->width; j++)
     {
         if(isnan(cloud->at(j).x)) continue;
-        cur_tree->insertRay(point3d( position.x(),position.y(),position.z()), 
+        cur_tree->insertRay(point3d( velo_orig.x(),velo_orig.y(),velo_orig.z()), 
             point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), Velodyne_puck.max_range);
         // add the point into map
         // map_pcl->points.push_back(pcl::PointXYZ(cloud_local->at(j).x, cloud_local->at(j).y, cloud_local->at(j).z));
@@ -206,17 +210,25 @@ void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
     }
 
     // Insert point cloud into octomap.
-    // cur_tree->insertPointCloud(*cloud,position);
+    // cur_tree->insertPointCloud(*cloud,velo_orig);
 
+    bool res = octomap_msgs::fullMapToMsg(*cur_tree, cur_tree_msg);
+    cur_tree_msg.header.seq = octomap_seq++;
+    cur_tree_msg.header.frame_id = "/map";
+    cur_tree_msg.header.stamp = ros::Time::now();
+    cur_tree_msg.resolution = octo_reso;
+    cur_tree_msg.binary = true;
+    cur_tree_msg.id = "OcTree";
     // map_pcl->height = 1;
     
     ROS_INFO("Entropy(Velo) : %f", get_free_volume(cur_tree));
-    // cout << "Entropy(velo) : " << get_free_volume(cur_tree) << endl;
     // map_pcl->header.stamp = ros::Time::now().toNSec() / 1e3;
     // Map_pcl_pub.publish(map_pcl);
 
-    cur_tree->writeBinary("Octomap_DA.bt");
-    // octomap_pub.publish(cur_tree);
+    // cur_tree->writeBinary("Octomap_DA.bt");
+    cur_tree->write("Octomap_DA.ot");
+    // cout << " " << endl;
+    octomap_pub.publish(cur_tree_msg);
     delete cloud;
     delete cloud_local;
 }
@@ -235,12 +247,12 @@ void hokuyo_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg )
     for (int j = 1; j< cloud->width; j++)
     {
         if(isnan(cloud->at(j).x)) continue;
-        cur_tree->insertRay(point3d( position.x(),position.y(),position.z()), 
+        cur_tree->insertRay(point3d( laser_orig.x(),laser_orig.y(),laser_orig.z()), 
             point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), Velodyne_puck.max_range);
     }
 
-    cout << "Entropy(scan) : " << get_free_volume(cur_tree) << endl;
-    // ROS_INFO("Sending goal");
+    // cout << "Entropy(scan) : " << get_free_volume(cur_tree) << endl;
+    ROS_INFO("Entropy(scan) : %f", get_free_volume(cur_tree));
     delete cloud;
     delete cloud_local;
 
@@ -256,13 +268,16 @@ int main(int argc, char **argv) {
     
     ros::Subscriber hokuyo_sub = nh.subscribe<sensor_msgs::PointCloud2>("/hokuyo_points", 1, hokuyo_callbacks);
 
-    ros::Publisher GoalMarker_pub = nh.advertise<visualization_msgs::Marker>( "Goal_Marker", 0 );
-    ros::Publisher JackalMarker_pub = nh.advertise<visualization_msgs::Marker>( "Jackal_Marker", 0 );
+    ros::Publisher GoalMarker_pub = nh.advertise<visualization_msgs::Marker>( "Goal_Marker", 1 );
+    ros::Publisher JackalMarker_pub = nh.advertise<visualization_msgs::Marker>( "Jackal_Marker", 1 );
+    ros::Publisher Candidates_pub = nh.advertise<visualization_msgs::MarkerArray>("Candidate_MIs", 1);
 
-    // octomap_pub = nh.advertise<octomap_msgs::Octomap>( "Octomap_explo ", 0);
+    octomap_pub = nh.advertise<octomap_msgs::Octomap>( "Octomap_realtime", 1);
 
     tf_listener = new tf::TransformListener();
     tf::StampedTransform transform;
+
+    visualization_msgs::MarkerArray marker_array_msg;
 
     Map_pcl_pub = nh.advertise<PointCloud>("Current_Map", 1);
     VScan_pcl_pub = nh.advertise<PointCloud>("virtual_Scans", 1);
@@ -285,52 +300,43 @@ int main(int argc, char **argv) {
 
 
     // Initialize parameters 
-    ros::Rate r(100); // 1 hz
+    // ros::Rate r(10); // 1 hz
     int max_idx = 0;
 
     position = point3d(0, 0, 0.0);
     // point3d dif_pos = point3d(0,0,0);
     point3d eu2dr(1, 0, 0);
     octomap::OcTreeNode *n;
-    octomap::OcTree new_tree(0.1);
+    octomap::OcTree new_tree(octo_reso);
     cur_tree = &new_tree;
 
-    // Get the current localization from tf
-    // bool find_tf = false;
-    // while (!find_tf)
-    // {
-    //     try{
-    //     tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
-    //     position = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
-    //     find_tf = true;
-    //     }
-    //     catch (tf::TransformException ex){
-    //     ROS_ERROR("%s",ex.what());
-    //     }
-    // }
-    // Update the initial location of the robot
-   while(!tf_listener->waitForTransform("/map", "/laser", ros::Time(0), ros::Duration(1.0)));
-// cout << "hello" << endl;
 
+    // Update the initial location of the robot
+   while(!tf_listener->waitForTransform("/map", "/velodyne", ros::Time(0), ros::Duration(1.0)));
+   while(!tf_listener->waitForTransform("/map", "/laser", ros::Time(0), ros::Duration(1.0)));
    try{
+        tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
+        velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
         tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
-        position = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+        laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
     }
         catch (tf::TransformException ex){
         ROS_ERROR("%s",ex.what());
     }
-    cout << "Initial  Position : " << position << " Heading : " << transform.getRotation().getAngle() << endl;
+    ROS_INFO("Initial  Position : %3.2f, %3.2f, %3.2f - Yaw : %3.1f ", laser_orig.x(), laser_orig.y(), laser_orig.z(), transform.getRotation().getAngle()*PI/180);
 
-    point3d next_vp(position.x(), position.y(),position.z());
+    point3d next_vp(laser_orig.x(), laser_orig.y(),laser_orig.z());
     RPY2Quaternion(0, 0, 0.5, &qx, &qy, &qz, &qw);
     bool arrived = goToDest(next_vp, qx, qy, qz, qw);
 
-    // Update latest localization
+    // Update the initial location of the robot
+   while(!tf_listener->waitForTransform("/map", "/velodyne", ros::Time(0), ros::Duration(1.0)));
    while(!tf_listener->waitForTransform("/map", "/laser", ros::Time(0), ros::Duration(1.0)));
-
    try{
+        tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
+        velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
         tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
-        position = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+        laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
     }
         catch (tf::TransformException ex){
         ROS_ERROR("%s",ex.what());
@@ -340,11 +346,14 @@ int main(int argc, char **argv) {
 
     RPY2Quaternion(0, 0, 1.0, &qx, &qy, &qz, &qw);
     arrived = goToDest(next_vp, qx, qy, qz, qw);
-    // Update latest localization
+    // Update the initial location of the robot
+   while(!tf_listener->waitForTransform("/map", "/velodyne", ros::Time(0), ros::Duration(1.0)));
    while(!tf_listener->waitForTransform("/map", "/laser", ros::Time(0), ros::Duration(1.0)));
    try{
+        tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
+        velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
         tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
-        position = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+        laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
     }
         catch (tf::TransformException ex){
         ROS_ERROR("%s",ex.what());
@@ -354,7 +363,8 @@ int main(int argc, char **argv) {
 
     // Visualize current position
     RPY2Quaternion(0, 0, transform.getRotation().getAngle(), &qx, &qy, &qz, &qw);
-    // Publish the goal as a Marker in rviz
+
+    // Publish the jackal_frame as a Marker in rviz
     visualization_msgs::Marker jackal_frame;
     jackal_frame.header.frame_id = "map";
     jackal_frame.header.stamp = ros::Time();
@@ -384,10 +394,9 @@ int main(int argc, char **argv) {
     while (ros::ok())
     {
         // Generate Candidates
-        vector<pair<point3d, point3d>> candidates = generate_candidates(position);
+        vector<pair<point3d, point3d>> candidates = generate_candidates(laser_orig);
         vector<double> MIs(candidates.size());
         double before = get_free_volume(cur_tree);
-        // cout << "CurMap  Entropy : " << get_free_volume(cur_tree) << endl;
         max_idx = 0;
 
         // for every candidate...
@@ -406,12 +415,41 @@ int main(int argc, char **argv) {
                 max_idx = i;
             }
         }
-        // cout << endl;
         next_vp = point3d(candidates[max_idx].first.x(),candidates[max_idx].first.y(),candidates[max_idx].first.z());
         ROS_INFO("Max MI : %f , @ location: %3.2f  %3.2f  %3.2f", MIs[max_idx], next_vp.x(), next_vp.y(), next_vp.z() );
-        // cout << "Max MI : " << MIs[max_idx] << endl;
 
         RPY2Quaternion(0, 0, candidates[max_idx].second.yaw(), &qx, &qy, &qz, &qw);
+
+        // Publish the candidates as marker array in rviz
+        double tmp_qx, tmp_qy, tmp_qz, tmp_qw;
+        RPY2Quaternion(0, PI/2, 0, &tmp_qx, &tmp_qy, &tmp_qz, &tmp_qw);
+        
+        marker_array_msg.markers.resize(candidates.size());
+        for (int i = 0; i < candidates.size(); i++)
+        {
+            marker_array_msg.markers[i].header.frame_id = "map";
+            marker_array_msg.markers[i].header.stamp = ros::Time::now();
+            marker_array_msg.markers[i].ns = "candidates";
+            marker_array_msg.markers[i].id = i;
+            marker_array_msg.markers[i].type = visualization_msgs::Marker::ARROW;
+            marker_array_msg.markers[i].action = visualization_msgs::Marker::ADD;
+            marker_array_msg.markers[i].pose.position.x = candidates[i].first.x();
+            marker_array_msg.markers[i].pose.position.y = candidates[i].first.y();
+            marker_array_msg.markers[i].pose.position.z = candidates[i].first.z();
+            marker_array_msg.markers[i].pose.orientation.x = tmp_qx;
+            marker_array_msg.markers[i].pose.orientation.y = tmp_qy;
+            marker_array_msg.markers[i].pose.orientation.z = tmp_qz;
+            marker_array_msg.markers[i].pose.orientation.w = tmp_qw;
+            marker_array_msg.markers[i].scale.x = MIs[i]/MIs[max_idx] + 0.01;
+            marker_array_msg.markers[i].scale.y = 0.05;
+            marker_array_msg.markers[i].scale.z = 0.05;
+            marker_array_msg.markers[i].color.a = 1.0;
+            marker_array_msg.markers[i].color.r = 0.0;
+            marker_array_msg.markers[i].color.g = 1.0;
+            marker_array_msg.markers[i].color.b = 0.0;
+        }
+        Candidates_pub.publish(marker_array_msg);
+
         // Publish the goal as a Marker in rviz
         visualization_msgs::Marker marker;
         marker.header.frame_id = "map";
@@ -436,19 +474,19 @@ int main(int argc, char **argv) {
         marker.color.b = 0.0;
         GoalMarker_pub.publish( marker );
 
-
         // Send the Robot 
-        // cout << "Sending the Goal : " << candidates[max_idx].first << " , Yaw : " << candidates[max_idx].second.yaw() << endl;
         arrived = goToDest(next_vp, qx, qy, qz, qw);
 
-        // cout << "Current Robot Location : " << position << endl;
         if(arrived)
         {
-            // Update latest localization
+            // Update the initial location of the robot
+           while(!tf_listener->waitForTransform("/map", "/velodyne", ros::Time(0), ros::Duration(1.0)));
            while(!tf_listener->waitForTransform("/map", "/laser", ros::Time(0), ros::Duration(1.0)));
            try{
+                tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
+                velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
                 tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
-                position = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+                laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
             }
                 catch (tf::TransformException ex){
                 ROS_ERROR("%s",ex.what());
@@ -461,7 +499,6 @@ int main(int argc, char **argv) {
         {
             ROS_ERROR("Failed to navigate to goal");
         }
-        // cout << "CurMap  Entropy after movement : " << get_free_volume(cur_tree) << endl;
         // r.sleep();
     }
     nh.shutdown();          
