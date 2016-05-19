@@ -36,6 +36,7 @@ const double free_prob = 0.3;
 const double octo_reso = 0.1;
 
 octomap::OcTree* cur_tree;
+octomap::OcTree* cur_tree_2d;
 octomap_msgs::Octomap cur_tree_msg;
 bool octomap_flag = 0; // 0 : msg not received
 bool kinect_flag = 0; // 0 : msg not received
@@ -249,10 +250,13 @@ void hokuyo_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg )
         if(isnan(cloud->at(j).x)) continue;
         cur_tree->insertRay(point3d( laser_orig.x(),laser_orig.y(),laser_orig.z()), 
             point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), Velodyne_puck.max_range);
+        cur_tree_2d->insertRay(point3d( laser_orig.x(),laser_orig.y(),laser_orig.z()), 
+            point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), Velodyne_puck.max_range);
     }
 
     // cout << "Entropy(scan) : " << get_free_volume(cur_tree) << endl;
     ROS_INFO("Entropy(scan) : %f", get_free_volume(cur_tree));
+    cur_tree_2d->write("Octomap_DA_2d.ot");
     delete cloud;
     delete cloud_local;
 
@@ -308,7 +312,9 @@ int main(int argc, char **argv) {
     point3d eu2dr(1, 0, 0);
     octomap::OcTreeNode *n;
     octomap::OcTree new_tree(octo_reso);
+    octomap::OcTree new_tree_2d(octo_reso);
     cur_tree = &new_tree;
+    cur_tree_2d = &new_tree_2d;
 
 
     // Update the initial location of the robot
