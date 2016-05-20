@@ -282,7 +282,7 @@ int main(int argc, char **argv) {
 
     octomap_pub = nh.advertise<octomap_msgs::Octomap>( "Octomap_realtime", 1);
 
-    tf_listener = new tf::TransformListener(nh,ros::Duration(1.0));
+    tf_listener = new tf::TransformListener();
     tf::StampedTransform transform;
 
     visualization_msgs::MarkerArray marker_array_msg;
@@ -320,24 +320,42 @@ int main(int argc, char **argv) {
     cur_tree = &new_tree;
     cur_tree_2d = &new_tree_2d;
 
+    bool got_tf = false;
+    ros::Time now;
 
     // Update the initial location of the robot
-   try{
-        tf_listener->waitForTransform("/map", "/velodyne", ros::Time(0), ros::Duration(3.0));
+    cout << "hello" << endl;
+    got_tf = false;
+    while(!got_tf){
+    try{
+        // now = ros::Time::now();
+        // tf_listener->waitForTransform("/map", "/velodyne", now, ros::Duration(1.0));
         tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
         velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+        got_tf = true;
     }
     catch (tf::TransformException ex) {
-        ROS_ERROR("%s",ex.what()); 
+        ROS_WARN("Wait for tf: velodyne to map"); 
+        ROS_ERROR("%s",ex.what());
     } 
-   try{
-        tf_listener->waitForTransform("/map", "/laser", ros::Time(0), ros::Duration(3.0));
+    ros::Duration(0.05).sleep();
+    }
+
+    got_tf = false;
+    while(!got_tf){
+    try{
+        // now = ros::Time::now();
+        // tf_listener->waitForTransform("/map", "/laser", now, ros::Duration(1.0));
         tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
         laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+        got_tf = true;
     }
     catch (tf::TransformException ex) {
-        ROS_ERROR("%s",ex.what()); 
+        ROS_WARN("Wait for tf: laser to map"); 
+        ROS_ERROR("%s",ex.what());
     } 
+    ros::Duration(0.05).sleep();
+    }
 
     ROS_INFO("Initial  Position : %3.2f, %3.2f, %3.2f - Yaw : %3.1f ", laser_orig.x(), laser_orig.y(), laser_orig.z(), transform.getRotation().getAngle()*PI/180);
 
@@ -346,22 +364,37 @@ int main(int argc, char **argv) {
     bool arrived = goToDest(next_vp, qx, qy, qz, qw);
 
     // Update the initial location of the robot
-   try{
-        tf_listener->waitForTransform("/map", "/velodyne", ros::Time(0), ros::Duration(3.0));
+    now = ros::Time::now();
+    got_tf = false;
+    while(!got_tf){
+    try{
+        // now = ros::Time::now();
+        // tf_listener->waitForTransform("/map", "/velodyne", now, ros::Duration(1.0));
         tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
         velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+        got_tf = true;
     }
     catch (tf::TransformException ex) {
-        ROS_ERROR("%s",ex.what()); 
+        ROS_WARN("Wait for tf: velodyne to map"); 
     } 
-   try{
-        tf_listener->waitForTransform("/map", "/laser", ros::Time(0), ros::Duration(3.0));
+    ros::Duration(0.05).sleep();
+    }
+
+    got_tf = false;
+    while(!got_tf){
+    try{
+        // now = ros::Time::now();
+        // tf_listener->waitForTransform("/map", "/laser", now, ros::Duration(1.0));
         tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
         laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+        got_tf = true;
     }
     catch (tf::TransformException ex) {
-        ROS_ERROR("%s",ex.what()); 
+        ROS_WARN("Wait for tf: laser to map"); 
     } 
+    ros::Duration(0.05).sleep();
+    }
+
     // Take a Second Scan
     ros::spinOnce();
 
@@ -369,22 +402,36 @@ int main(int argc, char **argv) {
     arrived = goToDest(next_vp, qx, qy, qz, qw);
 
     // Update the initial location of the robot
-   try{
-        tf_listener->waitForTransform("/map", "/velodyne", ros::Time(0), ros::Duration(3.0));
+    got_tf = false;
+    while(!got_tf){
+    try{
+        // now = ros::Time::now();
+        // tf_listener->waitForTransform("/map", "/velodyne", now, ros::Duration(1.0));
         tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
         velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+        got_tf = true;
     }
     catch (tf::TransformException ex) {
-        ROS_ERROR("%s",ex.what()); 
+        ROS_WARN("Wait for tf: velodyne to map"); 
     } 
-   try{
-        tf_listener->waitForTransform("/map", "/laser", ros::Time(0), ros::Duration(3.0));
+    ros::Duration(0.05).sleep();
+    }
+
+    got_tf = false;
+    while(!got_tf){
+    try{
+        // now = ros::Time::now();
+        // tf_listener->waitForTransform("/map", "/laser", now, ros::Duration(1.0));
         tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
         laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+        got_tf = true;
     }
     catch (tf::TransformException ex) {
-        ROS_ERROR("%s",ex.what()); 
+        ROS_WARN("Wait for tf: laser to map"); 
     } 
+    ros::Duration(0.05).sleep();
+    }
+
     // Take a Third Scan
     ros::spinOnce();
 
@@ -475,6 +522,8 @@ int main(int argc, char **argv) {
         }
         Candidates_pub.publish(marker_array_msg);
 
+        candidates.clear();
+
         // Publish the goal as a Marker in rviz
         visualization_msgs::Marker marker;
         marker.header.frame_id = "map";
@@ -505,23 +554,36 @@ int main(int argc, char **argv) {
         if(arrived)
         {
             // Update the initial location of the robot
-           try{
-                tf_listener->waitForTransform("/map", "/velodyne", ros::Time(0), ros::Duration(3.0));
+            got_tf = false;
+            while(!got_tf){
+            try{
+                // now = ros::Time::now();
+                // tf_listener->waitForTransform("/map", "/velodyne", now, ros::Duration(1.0));
                 tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
                 velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+                got_tf = true;
             }
             catch (tf::TransformException ex) {
-                ROS_ERROR("%s",ex.what()); 
+                ROS_WARN("Wait for tf: velodyne to map"); 
             } 
-           try{
-                ros::Time now = ros::Time::now();
-                tf_listener->waitForTransform("/map", "/laser", ros::Time(0), ros::Duration(3.0));
+            ros::Duration(0.05).sleep();
+            }
+
+            got_tf = false;
+            while(!got_tf){
+            try{
+                // now = ros::Time::now();
+                // tf_listener->waitForTransform("/map", "/laser", now, ros::Duration(1.0));
                 tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
                 laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+                got_tf = true;
             }
             catch (tf::TransformException ex) {
-                ROS_ERROR("%s",ex.what()); 
+                ROS_WARN("Wait for tf: laser to map"); 
             } 
+            ros::Duration(0.05).sleep();
+            }
+
             // Update Octomap
             ros::spinOnce();
             ROS_INFO("Succeed, new Map Free Volume: %f", get_free_volume(cur_tree));
