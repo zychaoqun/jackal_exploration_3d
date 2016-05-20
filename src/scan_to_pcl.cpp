@@ -33,7 +33,7 @@ void hokuyo_callbacks(const sensor_msgs::LaserScan::ConstPtr& scan_in)
 
     // Publish the new point cloud.
     cloud.header.frame_id = "/laser";
-    cloud.header.stamp = ros::Time::now();
+    cloud.header.stamp = scan_in->header.stamp;
     pcl_from_scan.publish(cloud);
 }
 

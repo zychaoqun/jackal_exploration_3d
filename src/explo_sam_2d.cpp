@@ -37,7 +37,7 @@ const double octo_reso = 0.1;
 
 octomap::OcTree* cur_tree;
 octomap::OcTree* cur_tree_2d;
-octomap_msgs::Octomap cur_tree_msg;
+
 bool octomap_flag = 0; // 0 : msg not received
 bool kinect_flag = 0; // 0 : msg not received
 tf::TransformListener *tf_listener; 
@@ -72,16 +72,16 @@ struct SensorModel {
             : width(_width), height(_height), horizontal_fov(_horizontal_fov), vertical_fov(_vertical_fov), max_range(_max_range) {
         angle_inc_hor = horizontal_fov / width;
         angle_inc_vel = vertical_fov / height;
-        // for(double j = -height / 2; j < height / 2; ++j) 
+        for(double j = -height / 2; j < height / 2; ++j) 
             for(double i = -width / 2; i < width / 2; ++i) {
-                // pitch_yaws.push_back(make_pair(j * angle_inc_vel, i * angle_inc_hor));
-                pitch_yaws.push_back(make_pair(0, i * angle_inc_hor));
+                pitch_yaws.push_back(make_pair(j * angle_inc_vel, i * angle_inc_hor));
+                pitch_yaws.push_back(make_pair(j * angle_inc_vel, i * angle_inc_hor));
         }
     }
 }; 
 
 // SensorModel Velodyne_puck(3600, 16, 2*PI, PI/6, 100.0 );
-SensorModel Velodyne_puck(360, 1, 2*PI, 0.00523, 100.0 );
+SensorModel Velodyne_puck(360, 16, 2*PI, 0.5236, 20.0);
 
 
 double get_free_volume(const octomap::OcTree *octree) {
@@ -144,10 +144,10 @@ vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig) {
     double x, y;
 
     // for(z = sensor_orig.z() - 1; z <= sensor_orig.z() + 1; z += 1)
-        for(double yaw = 0; yaw < 2 * PI; yaw += PI / n) {
+        for(double yaw = -PI; yaw < PI; yaw += PI / n) {
             x = sensor_orig.x() + R * cos(yaw);
             y = sensor_orig.y() + R * sin(yaw);
-            n_cur = cur_tree->search(point3d(x,y,z));
+            n_cur = cur_tree_2d->search(point3d(x,y,z));
             if(!n_cur)                                  continue;
             if(n_cur->getOccupancy() > free_prob)       continue;
             candidates.push_back(make_pair<point3d, point3d>(point3d(x, y, z), point3d(0, pitch, yaw)));
@@ -194,6 +194,7 @@ void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
     PointCloud* cloud (new PointCloud);
     PointCloud* cloud_local (new PointCloud);
     pcl::fromPCLPointCloud2(cloud2,*cloud_local);
+    octomap_msgs::Octomap cur_tree_msg;
 
     pcl_ros::transformPointCloud("/map", *cloud_local, *cloud, *tf_listener);
     // map_pcl->clear();
@@ -209,20 +210,24 @@ void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
         // map_pcl->points.push_back(pcl::PointXYZ(cloud_local->at(j).x, cloud_local->at(j).y, cloud_local->at(j).z));
         // map_pcl->width++;
     }
-
+    cur_tree->updateInnerOccupancy();
     // Insert point cloud into octomap.
     // cur_tree->insertPointCloud(*cloud,velo_orig);
 
     bool res = octomap_msgs::fullMapToMsg(*cur_tree, cur_tree_msg);
+    if(res)
+        ROS_INFO("octomap msg got it!");
+    else
+        ROS_ERROR("Failed to convert octomap to msg...");
     cur_tree_msg.header.seq = octomap_seq++;
     cur_tree_msg.header.frame_id = "/map";
-    cur_tree_msg.header.stamp = ros::Time::now();
+    cur_tree_msg.header.stamp = cloud2_msg->header.stamp;
     cur_tree_msg.resolution = octo_reso;
     cur_tree_msg.binary = true;
     cur_tree_msg.id = "OcTree";
     // map_pcl->height = 1;
     
-    ROS_INFO("Entropy(Velo) : %f", get_free_volume(cur_tree));
+    ROS_INFO("Entropy(3d map) : %f", get_free_volume(cur_tree));
     // map_pcl->header.stamp = ros::Time::now().toNSec() / 1e3;
     // Map_pcl_pub.publish(map_pcl);
 
@@ -248,14 +253,13 @@ void hokuyo_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg )
     for (int j = 1; j< cloud->width; j++)
     {
         if(isnan(cloud->at(j).x)) continue;
-        cur_tree->insertRay(point3d( laser_orig.x(),laser_orig.y(),laser_orig.z()), 
-            point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), Velodyne_puck.max_range);
+        // cur_tree->insertRay(point3d( laser_orig.x(),laser_orig.y(),laser_orig.z()), 
+        //     point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), Velodyne_puck.max_range);
         cur_tree_2d->insertRay(point3d( laser_orig.x(),laser_orig.y(),laser_orig.z()), 
-            point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), Velodyne_puck.max_range);
+            point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), 20.0);
     }
-
-    // cout << "Entropy(scan) : " << get_free_volume(cur_tree) << endl;
-    ROS_INFO("Entropy(scan) : %f", get_free_volume(cur_tree));
+    cur_tree_2d->updateInnerOccupancy();
+    ROS_INFO("Entropy(2d map) : %f", get_free_volume(cur_tree_2d));
     cur_tree_2d->write("Octomap_DA_2d.ot");
     delete cloud;
     delete cloud_local;
@@ -278,7 +282,7 @@ int main(int argc, char **argv) {
 
     octomap_pub = nh.advertise<octomap_msgs::Octomap>( "Octomap_realtime", 1);
 
-    tf_listener = new tf::TransformListener();
+    tf_listener = new tf::TransformListener(nh,ros::Duration(1.0));
     tf::StampedTransform transform;
 
     visualization_msgs::MarkerArray marker_array_msg;
@@ -318,17 +322,23 @@ int main(int argc, char **argv) {
 
 
     // Update the initial location of the robot
-   while(!tf_listener->waitForTransform("/map", "/velodyne", ros::Time(0), ros::Duration(1.0)));
-   while(!tf_listener->waitForTransform("/map", "/laser", ros::Time(0), ros::Duration(1.0)));
    try{
+        tf_listener->waitForTransform("/map", "/velodyne", ros::Time(0), ros::Duration(3.0));
         tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
         velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+    }
+    catch (tf::TransformException ex) {
+        ROS_ERROR("%s",ex.what()); 
+    } 
+   try{
+        tf_listener->waitForTransform("/map", "/laser", ros::Time(0), ros::Duration(3.0));
         tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
         laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
     }
-        catch (tf::TransformException ex){
-        ROS_ERROR("%s",ex.what());
-    }
+    catch (tf::TransformException ex) {
+        ROS_ERROR("%s",ex.what()); 
+    } 
+
     ROS_INFO("Initial  Position : %3.2f, %3.2f, %3.2f - Yaw : %3.1f ", laser_orig.x(), laser_orig.y(), laser_orig.z(), transform.getRotation().getAngle()*PI/180);
 
     point3d next_vp(laser_orig.x(), laser_orig.y(),laser_orig.z());
@@ -336,34 +346,45 @@ int main(int argc, char **argv) {
     bool arrived = goToDest(next_vp, qx, qy, qz, qw);
 
     // Update the initial location of the robot
-   while(!tf_listener->waitForTransform("/map", "/velodyne", ros::Time(0), ros::Duration(1.0)));
-   while(!tf_listener->waitForTransform("/map", "/laser", ros::Time(0), ros::Duration(1.0)));
    try{
+        tf_listener->waitForTransform("/map", "/velodyne", ros::Time(0), ros::Duration(3.0));
         tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
         velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+    }
+    catch (tf::TransformException ex) {
+        ROS_ERROR("%s",ex.what()); 
+    } 
+   try{
+        tf_listener->waitForTransform("/map", "/laser", ros::Time(0), ros::Duration(3.0));
         tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
         laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
     }
-        catch (tf::TransformException ex){
-        ROS_ERROR("%s",ex.what());
-    }
+    catch (tf::TransformException ex) {
+        ROS_ERROR("%s",ex.what()); 
+    } 
     // Take a Second Scan
     ros::spinOnce();
 
     RPY2Quaternion(0, 0, 1.0, &qx, &qy, &qz, &qw);
     arrived = goToDest(next_vp, qx, qy, qz, qw);
+
     // Update the initial location of the robot
-   while(!tf_listener->waitForTransform("/map", "/velodyne", ros::Time(0), ros::Duration(1.0)));
-   while(!tf_listener->waitForTransform("/map", "/laser", ros::Time(0), ros::Duration(1.0)));
    try{
+        tf_listener->waitForTransform("/map", "/velodyne", ros::Time(0), ros::Duration(3.0));
         tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
         velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+    }
+    catch (tf::TransformException ex) {
+        ROS_ERROR("%s",ex.what()); 
+    } 
+   try{
+        tf_listener->waitForTransform("/map", "/laser", ros::Time(0), ros::Duration(3.0));
         tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
         laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
     }
-        catch (tf::TransformException ex){
-        ROS_ERROR("%s",ex.what());
-    }
+    catch (tf::TransformException ex) {
+        ROS_ERROR("%s",ex.what()); 
+    } 
     // Take a Third Scan
     ros::spinOnce();
 
@@ -394,8 +415,6 @@ int main(int argc, char **argv) {
     jackal_frame.color.b = 0.0;
     JackalMarker_pub.publish( jackal_frame );
 
-    // Initial Scan
-    // ros::spinOnce();
 
     while (ros::ok())
     {
@@ -449,7 +468,7 @@ int main(int argc, char **argv) {
             marker_array_msg.markers[i].scale.x = MIs[i]/MIs[max_idx] + 0.01;
             marker_array_msg.markers[i].scale.y = 0.05;
             marker_array_msg.markers[i].scale.z = 0.05;
-            marker_array_msg.markers[i].color.a = 1.0;
+            marker_array_msg.markers[i].color.a = MIs[i]/MIs[max_idx] + 0.01;
             marker_array_msg.markers[i].color.r = 0.0;
             marker_array_msg.markers[i].color.g = 1.0;
             marker_array_msg.markers[i].color.b = 0.0;
@@ -486,17 +505,23 @@ int main(int argc, char **argv) {
         if(arrived)
         {
             // Update the initial location of the robot
-           while(!tf_listener->waitForTransform("/map", "/velodyne", ros::Time(0), ros::Duration(1.0)));
-           while(!tf_listener->waitForTransform("/map", "/laser", ros::Time(0), ros::Duration(1.0)));
            try{
+                tf_listener->waitForTransform("/map", "/velodyne", ros::Time(0), ros::Duration(3.0));
                 tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
                 velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+            }
+            catch (tf::TransformException ex) {
+                ROS_ERROR("%s",ex.what()); 
+            } 
+           try{
+                ros::Time now = ros::Time::now();
+                tf_listener->waitForTransform("/map", "/laser", ros::Time(0), ros::Duration(3.0));
                 tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
                 laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
             }
-                catch (tf::TransformException ex){
-                ROS_ERROR("%s",ex.what());
-            }
+            catch (tf::TransformException ex) {
+                ROS_ERROR("%s",ex.what()); 
+            } 
             // Update Octomap
             ros::spinOnce();
             ROS_INFO("Succeed, new Map Free Volume: %f", get_free_volume(cur_tree));
