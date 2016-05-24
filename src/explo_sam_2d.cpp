@@ -132,19 +132,19 @@ vector<point3d> cast_sensor_rays(const octomap::OcTree *octree, const point3d &p
     return hits;
 }
 
-vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig) {
+vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig, double initial_yaw) {
     double R = 0.5;   // Robot step, in meters.
-    double n = 5;
+    double n = 3;
     int counter = 0;
     octomap::OcTreeNode *n_cur;
 
     vector<pair<point3d, point3d>> candidates;
     double z = sensor_orig.z();                // fixed 
-    double pitch = 0;                   // fixed
+    double pitch = 0;                           // fixed
     double x, y;
 
     // for(z = sensor_orig.z() - 1; z <= sensor_orig.z() + 1; z += 1)
-        for(double yaw = -PI; yaw < PI; yaw += PI / n) {
+        for(double yaw = initial_yaw-PI/2; yaw < initial_yaw+PI/2; yaw += PI / (2*n) ) {
             x = sensor_orig.x() + R * cos(yaw);
             y = sensor_orig.y() + R * sin(yaw);
             n_cur = cur_tree_2d->search(point3d(x,y,z));
@@ -466,7 +466,7 @@ int main(int argc, char **argv) {
     while (ros::ok())
     {
         // Generate Candidates
-        vector<pair<point3d, point3d>> candidates = generate_candidates(laser_orig);
+        vector<pair<point3d, point3d>> candidates = generate_candidates(laser_orig, transform.getRotation().getAngle());
         vector<double> MIs(candidates.size());
         double before = get_free_volume(cur_tree);
         max_idx = 0;
