@@ -147,7 +147,34 @@ vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig, double i
             counter++;
         }
 
-    ROS_INFO("Candidates : %d", counter);
+    ROS_INFO("Training Poses : %d", counter);
+    return candidates;
+}
+
+
+vector<pair<point3d, point3d>> generate_testing(point3d sensor_orig, double initial_yaw) {
+    double R = 0.5;   // Robot step, in meters.
+    double n = 10;
+    int counter = 0;
+    octomap::OcTreeNode *n_cur;
+
+    vector<pair<point3d, point3d>> candidates;
+    double z = sensor_orig.z();                // fixed 
+    double pitch = 0;                           // fixed
+    double x, y;
+
+    // for(z = sensor_orig.z() - 1; z <= sensor_orig.z() + 1; z += 1)
+        for(double yaw = initial_yaw-PI/2; yaw < initial_yaw+PI/2; yaw += PI / (2*n) ) {
+            x = sensor_orig.x() + R * cos(yaw);
+            y = sensor_orig.y() + R * sin(yaw);
+            n_cur = cur_tree_2d->search(point3d(x,y,z));
+            if(!n_cur)                                  continue;
+            if(n_cur->getOccupancy() > free_prob)       continue;
+            candidates.push_back(make_pair<point3d, point3d>(point3d(x, y, z), point3d(0, pitch, yaw)));
+            counter++;
+        }
+
+    ROS_INFO("Testing Poses : %d", counter);
     return candidates;
 }
 
@@ -189,7 +216,10 @@ void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
     pcl::fromPCLPointCloud2(cloud2,*cloud_local);
     octomap_msgs::Octomap cur_tree_msg;
 
-    pcl_ros::transformPointCloud("/map", *cloud_local, *cloud, *tf_listener);
+    while(!pcl_ros::transformPointCloud("/map", *cloud_local, *cloud, *tf_listener))
+    {
+        ros::Duration(0.05).sleep();
+    }
     // map_pcl->clear();
     // map_pcl->header.frame_id = "/explo_points";
 
@@ -240,7 +270,10 @@ void hokuyo_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg )
     PointCloud* cloud_local (new PointCloud);
     pcl::fromPCLPointCloud2(cloud2,*cloud_local);
 
-    pcl_ros::transformPointCloud("/map", *cloud_local, *cloud, *tf_listener);
+    while(!pcl_ros::transformPointCloud("/map", *cloud_local, *cloud, *tf_listener))
+    {
+        ros::Duration(0.05).sleep();
+    }
 
     // Insert points into octomap one by one...
     for (int j = 1; j< cloud->width; j++)
@@ -272,14 +305,16 @@ int main(int argc, char **argv) {
     ros::Publisher GoalMarker_pub = nh.advertise<visualization_msgs::Marker>( "Goal_Marker", 1 );
     ros::Publisher JackalMarker_pub = nh.advertise<visualization_msgs::Marker>( "Jackal_Marker", 1 );
     ros::Publisher Candidates_pub = nh.advertise<visualization_msgs::MarkerArray>("Candidate_MIs", 1);
+    ros::Publisher Octomap_marker_pub = nh.advertise<visualization_msgs::Marker>("Occupied_MarkerArray", 1);
 
     octomap_pub = nh.advertise<octomap_msgs::Octomap>( "Octomap_realtime", 1);
 
     tf_listener = new tf::TransformListener();
     tf::StampedTransform transform;
 
-    visualization_msgs::MarkerArray marker_array_msg;
-
+    visualization_msgs::MarkerArray CandidatesMarker_array;
+    visualization_msgs::Marker OctomapOccupied_cubelist;
+    
     Map_pcl_pub = nh.advertise<PointCloud>("Current_Map", 1);
     VScan_pcl_pub = nh.advertise<PointCloud>("virtual_Scans", 1);
     Free_pcl_pub = nh.advertise<PointCloud>("Free_points", 1);
@@ -337,8 +372,6 @@ int main(int argc, char **argv) {
     got_tf = false;
     while(!got_tf){
     try{
-        // now = ros::Time::now();
-        // tf_listener->waitForTransform("/map", "/laser", now, ros::Duration(1.0));
         tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
         laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
         got_tf = true;
@@ -361,8 +394,6 @@ int main(int argc, char **argv) {
     got_tf = false;
     while(!got_tf){
     try{
-        // now = ros::Time::now();
-        // tf_listener->waitForTransform("/map", "/velodyne", now, ros::Duration(1.0));
         tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
         velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
         got_tf = true;
@@ -376,8 +407,6 @@ int main(int argc, char **argv) {
     got_tf = false;
     while(!got_tf){
     try{
-        // now = ros::Time::now();
-        // tf_listener->waitForTransform("/map", "/laser", now, ros::Duration(1.0));
         tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
         laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
         got_tf = true;
@@ -398,8 +427,6 @@ int main(int argc, char **argv) {
     got_tf = false;
     while(!got_tf){
     try{
-        // now = ros::Time::now();
-        // tf_listener->waitForTransform("/map", "/velodyne", now, ros::Duration(1.0));
         tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
         velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
         got_tf = true;
@@ -413,8 +440,6 @@ int main(int argc, char **argv) {
     got_tf = false;
     while(!got_tf){
     try{
-        // now = ros::Time::now();
-        // tf_listener->waitForTransform("/map", "/laser", now, ros::Duration(1.0));
         tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
         laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
         got_tf = true;
@@ -431,35 +456,39 @@ int main(int argc, char **argv) {
     // Visualize current position
     RPY2Quaternion(0, 0, transform.getRotation().getAngle(), &qx, &qy, &qz, &qw);
 
-    // Publish the jackal_frame as a Marker in rviz
-    visualization_msgs::Marker jackal_frame;
-    jackal_frame.header.frame_id = "map";
-    jackal_frame.header.stamp = ros::Time();
-    jackal_frame.ns = "robot_frame";
-    jackal_frame.id = 0;
-    jackal_frame.type = visualization_msgs::Marker::ARROW;
-    jackal_frame.action = visualization_msgs::Marker::ADD;
-    jackal_frame.pose.position.x = position.x();
-    jackal_frame.pose.position.y = position.y();
-    jackal_frame.pose.position.z = position.z();
-    jackal_frame.pose.orientation.x = qx;
-    jackal_frame.pose.orientation.y = qy;
-    jackal_frame.pose.orientation.z = qz;
-    jackal_frame.pose.orientation.w = qw;
-    jackal_frame.scale.x = 0.5;
-    jackal_frame.scale.y = 0.1;
-    jackal_frame.scale.z = 0.1;
-    jackal_frame.color.a = 1.0; // Don't forget to set the alpha!
-    jackal_frame.color.r = 1.0;
-    jackal_frame.color.g = 0.0;
-    jackal_frame.color.b = 0.0;
-    JackalMarker_pub.publish( jackal_frame );
+    // // Publish the jackal_frame as a Marker in rviz
+    // visualization_msgs::Marker jackal_frame;
+    // jackal_frame.header.frame_id = "map";
+    // jackal_frame.header.stamp = ros::Time();
+    // jackal_frame.ns = "robot_frame";
+    // jackal_frame.id = 0;
+    // jackal_frame.type = visualization_msgs::Marker::ARROW;
+    // jackal_frame.action = visualization_msgs::Marker::ADD;
+    // jackal_frame.pose.position.x = position.x();
+    // jackal_frame.pose.position.y = position.y();
+    // jackal_frame.pose.position.z = position.z();
+    // jackal_frame.pose.orientation.x = qx;
+    // jackal_frame.pose.orientation.y = qy;
+    // jackal_frame.pose.orientation.z = qz;
+    // jackal_frame.pose.orientation.w = qw;
+    // jackal_frame.scale.x = 0.5;
+    // jackal_frame.scale.y = 0.1;
+    // jackal_frame.scale.z = 0.1;
+    // jackal_frame.color.a = 1.0; // Don't forget to set the alpha!
+    // jackal_frame.color.r = 1.0;
+    // jackal_frame.color.g = 0.0;
+    // jackal_frame.color.b = 0.0;
+    // JackalMarker_pub.publish( jackal_frame );
 
+    double train_time, test_time;
 
     while (ros::ok())
     {
-        // Generate Candidates
+        // Generate Training poses
         vector<pair<point3d, point3d>> candidates = generate_candidates(laser_orig, transform.getRotation().getAngle());
+        // Generate Testing poses
+        vector<pair<point3d, point3d>> gp_test_poses = generate_testing(laser_orig, transform.getRotation().getAngle());
+
         vector<double> MIs(candidates.size());
         double before = get_free_volume(cur_tree);
         max_idx = 0;
@@ -474,58 +503,79 @@ int main(int argc, char **argv) {
             vector<point3d> hits = cast_sensor_rays(cur_tree, c.first, eu2dr);
             MIs[i] = calc_MI(cur_tree, c.first, hits, before);
 
-            // Pick the Best Candidate
-            if (MIs[i] > MIs[max_idx])
+        }
+
+        GPRegressor g(1, 1, 1);
+        MatrixXf gp_train_x(candidates.size(), 2), gp_train_label(candidates.size(), 1), gp_test_x(gp_test_poses.size(), 2);
+
+        for (int i=0; i< candidates.size(); i++){
+            gp_train_x(i,0) = candidates[i].first.x();
+            gp_train_x(i,1) = candidates[i].first.y();
+            gp_train_label(i) = MIs[i];
+        }
+
+        for (int i=0; i< gp_test_poses.size(); i++){
+            gp_test_x(i,0) = gp_test_poses[i].first.x();
+            gp_test_x(i,1) = gp_test_poses[i].first.y();
+        }
+
+        MatrixXf m, s2;
+        train_time = ros::Time::now().toSec();
+        g.train(gp_train_x, gp_train_label);
+        train_time = ros::Time::now().toSec() - train_time;
+        ROS_INFO("GP training takes time(sec) : %f", train_time);
+
+        test_time = ros::Time::now().toSec();
+        g.test(gp_test_x, m, s2);
+        test_time = ros::Time::now().toSec() - test_time;
+        ROS_INFO("GP testing takes time(sec) : %f", test_time);
+
+        // Perform GP regression
+        for (int i = 0; i < gp_test_poses.size(); i++){
+            // Pick the Best from regression
+            if (m(i) > m(max_idx))
             {
                 max_idx = i;
             }
-
-            GPRegressor g(1, 1, 1);
-            MatrixXf x(2, 2), y(2, 1), xs(1, 2);
-            x << 1, 2, 2, 3;
-            y << 1, -1;
-            xs << 3, 4;
-
-            MatrixXf m, s2;
-            g.train(x, y);
-            g.test(xs, m, s2);
-            std::cout << m << std::endl;
-            std::cout << s2 << std::endl;
         }
-        next_vp = point3d(candidates[max_idx].first.x(),candidates[max_idx].first.y(),candidates[max_idx].first.z());
-        ROS_INFO("Max MI : %f , @ location: %3.2f  %3.2f  %3.2f", MIs[max_idx], next_vp.x(), next_vp.y(), next_vp.z() );
+        // 
+        next_vp = point3d(gp_test_x(max_idx,0),gp_test_x(max_idx,1),candidates[0].first.z());
+        ROS_INFO("Max MI : %f , @ location: %3.2f  %3.2f  %3.2f", m(max_idx), next_vp.x(), next_vp.y(), next_vp.z() );
 
-        RPY2Quaternion(0, 0, candidates[max_idx].second.yaw(), &qx, &qy, &qz, &qw);
+        RPY2Quaternion(0, 0, gp_test_poses[max_idx].second.yaw(), &qx, &qy, &qz, &qw);
 
         // Publish the candidates as marker array in rviz
         double tmp_qx, tmp_qy, tmp_qz, tmp_qw;
         RPY2Quaternion(0, PI/2, 0, &tmp_qx, &tmp_qy, &tmp_qz, &tmp_qw);
         
-        marker_array_msg.markers.resize(candidates.size());
-        for (int i = 0; i < candidates.size(); i++)
+        CandidatesMarker_array.markers.resize(gp_test_poses.size());
+        ros::Time now_marker = ros::Time::now();
+        for (int i = 0; i < gp_test_poses.size(); i++)
         {
-            marker_array_msg.markers[i].header.frame_id = "map";
-            marker_array_msg.markers[i].header.stamp = ros::Time::now();
-            marker_array_msg.markers[i].ns = "candidates";
-            marker_array_msg.markers[i].id = i;
-            marker_array_msg.markers[i].type = visualization_msgs::Marker::ARROW;
-            marker_array_msg.markers[i].action = visualization_msgs::Marker::ADD;
-            marker_array_msg.markers[i].pose.position.x = candidates[i].first.x();
-            marker_array_msg.markers[i].pose.position.y = candidates[i].first.y();
-            marker_array_msg.markers[i].pose.position.z = candidates[i].first.z();
-            marker_array_msg.markers[i].pose.orientation.x = tmp_qx;
-            marker_array_msg.markers[i].pose.orientation.y = tmp_qy;
-            marker_array_msg.markers[i].pose.orientation.z = tmp_qz;
-            marker_array_msg.markers[i].pose.orientation.w = tmp_qw;
-            marker_array_msg.markers[i].scale.x = MIs[i]/MIs[max_idx] + 0.01;
-            marker_array_msg.markers[i].scale.y = 0.05;
-            marker_array_msg.markers[i].scale.z = 0.05;
-            marker_array_msg.markers[i].color.a = MIs[i]/MIs[max_idx] + 0.01;
-            marker_array_msg.markers[i].color.r = 0.0;
-            marker_array_msg.markers[i].color.g = 1.0;
-            marker_array_msg.markers[i].color.b = 0.0;
+            CandidatesMarker_array.markers[i].header.frame_id = "map";
+            CandidatesMarker_array.markers[i].header.stamp = now_marker;
+            CandidatesMarker_array.markers[i].ns = "candidates";
+            CandidatesMarker_array.markers[i].id = i;
+            CandidatesMarker_array.markers[i].type = visualization_msgs::Marker::ARROW;
+            CandidatesMarker_array.markers[i].action = visualization_msgs::Marker::ADD;
+            CandidatesMarker_array.markers[i].pose.position.x = gp_test_x(i,0);
+            CandidatesMarker_array.markers[i].pose.position.y = gp_test_x(i,1);
+            CandidatesMarker_array.markers[i].pose.position.z = candidates[0].first.z();
+            CandidatesMarker_array.markers[i].pose.orientation.x = tmp_qx;
+            CandidatesMarker_array.markers[i].pose.orientation.y = tmp_qy;
+            CandidatesMarker_array.markers[i].pose.orientation.z = tmp_qz;
+            CandidatesMarker_array.markers[i].pose.orientation.w = tmp_qw;
+            CandidatesMarker_array.markers[i].scale.x = m(i)/m(max_idx) + 0.01;
+            CandidatesMarker_array.markers[i].scale.y = 0.05;
+            CandidatesMarker_array.markers[i].scale.z = 0.05;
+            CandidatesMarker_array.markers[i].color.a = m(i)/m(max_idx) + 0.01;
+            CandidatesMarker_array.markers[i].color.r = 0.0;
+            CandidatesMarker_array.markers[i].color.g = 1.0;
+            CandidatesMarker_array.markers[i].color.b = 0.0;
         }
-        Candidates_pub.publish(marker_array_msg);
+        Candidates_pub.publish(CandidatesMarker_array);
+
+        // delete CandidatesMarker_array;
 
         candidates.clear();
 
@@ -592,6 +642,52 @@ int main(int argc, char **argv) {
             // Update Octomap
             ros::spinOnce();
             ROS_INFO("Succeed, new Map Free Volume: %f", get_free_volume(cur_tree));
+
+            unsigned long num_occupied_cells = 0;
+            double testX;
+            for(octomap::OcTree::leaf_iterator n = cur_tree->begin_leafs(cur_tree->getTreeDepth()); n != cur_tree->end_leafs(); ++n) {
+                if(cur_tree->isNodeOccupied(*n)){
+                    num_occupied_cells++;
+                }
+            }            
+            // OctomapOccupied_cubelist.markers.resize(num_occupied_cells);
+            unsigned long int j = 0;
+
+            OctomapOccupied_cubelist.header.frame_id = "map";
+            OctomapOccupied_cubelist.header.stamp = now_marker;
+            OctomapOccupied_cubelist.ns = "octomap_occupied_array";
+            OctomapOccupied_cubelist.id = j;
+            OctomapOccupied_cubelist.type = visualization_msgs::Marker::CUBE_LIST;
+            OctomapOccupied_cubelist.action = visualization_msgs::Marker::ADD;
+            OctomapOccupied_cubelist.scale.x = 0.1;
+            OctomapOccupied_cubelist.scale.y = 0.1;
+            OctomapOccupied_cubelist.scale.z = 0.1;
+            OctomapOccupied_cubelist.color.a = 1.0;
+            OctomapOccupied_cubelist.color.r = 0.0;
+            OctomapOccupied_cubelist.color.g = 0.0;
+            OctomapOccupied_cubelist.color.b = 1.0;
+            ROS_INFO("occupied cube list header ready");
+            geometry_msgs::Point p;
+            now_marker = ros::Time::now();
+            for(octomap::OcTree::leaf_iterator n = cur_tree->begin_leafs(cur_tree->getTreeDepth()); n != cur_tree->end_leafs(); ++n) {
+                if(!cur_tree->isNodeOccupied(*n)) continue;
+
+                p.x = n.getX();
+                p.y = n.getY();
+                p.z = n.getZ();
+                OctomapOccupied_cubelist.points.push_back(p); 
+
+                j++;
+            }
+            ROS_INFO("Publishing %ld occupied cells", j);
+            Octomap_marker_pub.publish(OctomapOccupied_cubelist);
+
+            OctomapOccupied_cubelist.points.clear();
+
+            gp_test_poses.clear();
+
+            // Octomap_marker_pub.publish();
+
         }
         else
         {

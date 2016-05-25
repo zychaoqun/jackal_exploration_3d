@@ -196,7 +196,11 @@ void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
     pcl::fromPCLPointCloud2(cloud2,*cloud_local);
     octomap_msgs::Octomap cur_tree_msg;
 
-    pcl_ros::transformPointCloud("/map", *cloud_local, *cloud, *tf_listener);
+    while(!pcl_ros::transformPointCloud("/map", *cloud_local, *cloud, *tf_listener))
+    {
+        ros::Duration(0.05).sleep();
+    }
+
     // map_pcl->clear();
     // map_pcl->header.frame_id = "/explo_points";
 
@@ -215,6 +219,7 @@ void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
     // cur_tree->insertPointCloud(*cloud,velo_orig);
 
     bool res = octomap_msgs::fullMapToMsg(*cur_tree, cur_tree_msg);
+
     if(res)
         ROS_INFO("octomap msg got it!");
     else
@@ -247,8 +252,11 @@ void hokuyo_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg )
     PointCloud* cloud_local (new PointCloud);
     pcl::fromPCLPointCloud2(cloud2,*cloud_local);
 
-    pcl_ros::transformPointCloud("/map", *cloud_local, *cloud, *tf_listener);
-
+    while(!pcl_ros::transformPointCloud("/map", *cloud_local, *cloud, *tf_listener))
+    {
+        ros::Duration(0.05).sleep();
+    }
+    
     // Insert points into octomap one by one...
     for (int j = 1; j< cloud->width; j++)
     {

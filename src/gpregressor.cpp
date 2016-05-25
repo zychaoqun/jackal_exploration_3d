@@ -4,8 +4,11 @@
 
 #include "gpregressor.h"
 #include "covMaterniso3.h"
+#include <iostream>
+
 
 using namespace Eigen;
+// using namespace std;
 
 void GPRegressor::train(const MatrixXf &_x, const MatrixXf &y) {
     x = MatrixXf(_x);
@@ -53,17 +56,18 @@ void GPRegressor::test(const MatrixXf &xs, MatrixXf &m, MatrixXf &s2) const {
 
 // int main()
 // {
-// GPRegressor g(1, 1, 1);
-// MatrixXf x(2, 2), y(2, 1), xs(1, 2);
-// x << 1, 2, 2, 3;
-// y << 1, -1;
-// xs << 3, 4;
+//     GPRegressor g(1, 1, 1);
+//     MatrixXf x(2, 2), y(2, 1), xs(2, 2);
+//     x << 1, 2, 2, 3;
+//     y << 1, -1;
+//     xs(0,0) = 1;  xs(0,1) = 2;
+//     xs(1,0) = 2;  xs(1,1) = 3;
 
-// MatrixXf m, s2;
-// g.train(x, y);
-// g.test(xs, m, s2);
-// std::cout << m << std::endl;
-// std::cout << s2 << std::endl;
+//     MatrixXf m, s2;
+//     g.train(x, y);
+//     g.test(xs, m, s2);
+//     std::cout << "gp mean  : " << m << "size: " << m.size() << std::endl;
+//     std::cout << "gp cov   : " << s2 << std::endl;
 
-// return 0;
+//     return 0;
 // }
