@@ -3,6 +3,7 @@
 #include <chrono>
 #include <algorithm>
 #include <iterator>
+#include <ctime>
 
 #include <pcl/point_types.h>
 #include <sensor_msgs/PointCloud2.h>
@@ -42,21 +43,11 @@ bool octomap_flag = 0; // 0 : msg not received
 bool kinect_flag = 0; // 0 : msg not received
 tf::TransformListener *tf_listener; 
 int octomap_seq = 0;
-
-
-// laser_geometry::LaserProjection projector;
    
 point3d position, laser_orig, velo_orig;
-// point3d orientation;
+ofstream explo_log_file;
+std::string octomap_name_2d, octomap_name_3d;
 
-ros::Publisher Map_pcl_pub;
-ros::Publisher Free_pcl_pub;
-ros::Publisher VScan_pcl_pub;
-ros::Publisher octomap_pub;
-
-PointCloud::Ptr map_pcl (new PointCloud);
-PointCloud::Ptr free_pcl (new PointCloud);
-PointCloud::Ptr vsn_pcl (new PointCloud);
 
 struct SensorModel {
     double horizontal_fov;
@@ -154,7 +145,7 @@ vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig, double i
             counter++;
         }
 
-    ROS_INFO("Candidates : %d", counter);
+    // ROS_INFO("Training Poses : %d", counter);
     return candidates;
 }
 
@@ -196,13 +187,11 @@ void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
     pcl::fromPCLPointCloud2(cloud2,*cloud_local);
     octomap_msgs::Octomap cur_tree_msg;
 
+    ros::Duration(0.07).sleep();
     while(!pcl_ros::transformPointCloud("/map", *cloud_local, *cloud, *tf_listener))
     {
-        ros::Duration(0.05).sleep();
+        ros::Duration(0.01).sleep();
     }
-
-    // map_pcl->clear();
-    // map_pcl->header.frame_id = "/explo_points";
 
     // Insert points into octomap one by one...
     for (int j = 1; j< cloud->width; j++)
@@ -210,36 +199,28 @@ void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
         if(isnan(cloud->at(j).x)) continue;
         cur_tree->insertRay(point3d( velo_orig.x(),velo_orig.y(),velo_orig.z()), 
             point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), Velodyne_puck.max_range);
-        // add the point into map
-        // map_pcl->points.push_back(pcl::PointXYZ(cloud_local->at(j).x, cloud_local->at(j).y, cloud_local->at(j).z));
-        // map_pcl->width++;
     }
     cur_tree->updateInnerOccupancy();
     // Insert point cloud into octomap.
     // cur_tree->insertPointCloud(*cloud,velo_orig);
 
-    bool res = octomap_msgs::fullMapToMsg(*cur_tree, cur_tree_msg);
-
-    if(res)
-        ROS_INFO("octomap msg got it!");
-    else
-        ROS_ERROR("Failed to convert octomap to msg...");
-    cur_tree_msg.header.seq = octomap_seq++;
-    cur_tree_msg.header.frame_id = "/map";
-    cur_tree_msg.header.stamp = cloud2_msg->header.stamp;
-    cur_tree_msg.resolution = octo_reso;
-    cur_tree_msg.binary = true;
-    cur_tree_msg.id = "OcTree";
-    // map_pcl->height = 1;
+    // bool res = octomap_msgs::fullMapToMsg(*cur_tree, cur_tree_msg);
+    // if(res)
+    //     ROS_INFO("octomap msg got it!");
+    // else
+    //     ROS_ERROR("Failed to convert octomap to msg...");
+    // cur_tree_msg.header.seq = octomap_seq++;
+    // cur_tree_msg.header.frame_id = "/map";
+    // cur_tree_msg.header.stamp = cloud2_msg->header.stamp;
+    // cur_tree_msg.resolution = octo_reso;
+    // cur_tree_msg.binary = true;
+    // cur_tree_msg.id = "OcTree";
     
     ROS_INFO("Entropy(3d map) : %f", get_free_volume(cur_tree));
-    // map_pcl->header.stamp = ros::Time::now().toNSec() / 1e3;
-    // Map_pcl_pub.publish(map_pcl);
 
     // cur_tree->writeBinary("Octomap_DA.bt");
-    cur_tree->write("Octomap_DA.ot");
-    // cout << " " << endl;
-    octomap_pub.publish(cur_tree_msg);
+    cur_tree->write(octomap_name_3d);
+    // octomap_pub.publish(cur_tree_msg);
     delete cloud;
     delete cloud_local;
 }
@@ -252,11 +233,12 @@ void hokuyo_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg )
     PointCloud* cloud_local (new PointCloud);
     pcl::fromPCLPointCloud2(cloud2,*cloud_local);
 
+    ros::Duration(0.07).sleep();
     while(!pcl_ros::transformPointCloud("/map", *cloud_local, *cloud, *tf_listener))
     {
-        ros::Duration(0.05).sleep();
+        ros::Duration(0.01).sleep();
     }
-    
+
     // Insert points into octomap one by one...
     for (int j = 1; j< cloud->width; j++)
     {
@@ -268,7 +250,7 @@ void hokuyo_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg )
     }
     cur_tree_2d->updateInnerOccupancy();
     ROS_INFO("Entropy(2d map) : %f", get_free_volume(cur_tree_2d));
-    cur_tree_2d->write("Octomap_DA_2d.ot");
+    cur_tree_2d->write(octomap_name_2d);
     delete cloud;
     delete cloud_local;
 
@@ -280,40 +262,54 @@ int main(int argc, char **argv) {
     // ros::Subscriber octomap_sub;
     // octomap_sub = nh.subscribe<octomap_msgs::Octomap>("/octomap_binary", 10, octomap_callback);
 
-    ros::Subscriber velodyne_sub = nh.subscribe<sensor_msgs::PointCloud2>("/velodyne_points", 1, velodyne_callbacks);
-    
-    ros::Subscriber hokuyo_sub = nh.subscribe<sensor_msgs::PointCloud2>("/hokuyo_points", 1, hokuyo_callbacks);
+    // Initialize time
+    time_t rawtime;
+    struct tm * timeinfo;
+    char buffer[80];
+    time (&rawtime);
+    timeinfo = localtime(&rawtime);
+    strftime(buffer,80,"%R_%M%S_%m%d_DA.txt",timeinfo);
+    std::string logfilename(buffer);
+    std::cout << logfilename << endl;
+    strftime(buffer,80,"octomap_2d_%R_%M%S_%m%d_DA.ot",timeinfo);
+    octomap_name_2d = buffer;
+    strftime(buffer,80,"octomap_3d_%R_%M%S_%m%d_DA.ot",timeinfo);
+    octomap_name_3d = buffer;
 
+
+    ros::Subscriber velodyne_sub = nh.subscribe<sensor_msgs::PointCloud2>("/velodyne_points", 1, velodyne_callbacks);
+    ros::Subscriber hokuyo_sub = nh.subscribe<sensor_msgs::PointCloud2>("/hokuyo_points", 1, hokuyo_callbacks);
     ros::Publisher GoalMarker_pub = nh.advertise<visualization_msgs::Marker>( "Goal_Marker", 1 );
     ros::Publisher JackalMarker_pub = nh.advertise<visualization_msgs::Marker>( "Jackal_Marker", 1 );
     ros::Publisher Candidates_pub = nh.advertise<visualization_msgs::MarkerArray>("Candidate_MIs", 1);
+    ros::Publisher Octomap_marker_pub = nh.advertise<visualization_msgs::Marker>("Occupied_MarkerArray", 1);
 
-    octomap_pub = nh.advertise<octomap_msgs::Octomap>( "Octomap_realtime", 1);
 
     tf_listener = new tf::TransformListener();
     tf::StampedTransform transform;
 
-    visualization_msgs::MarkerArray marker_array_msg;
+    visualization_msgs::MarkerArray CandidatesMarker_array;
+    visualization_msgs::Marker OctomapOccupied_cubelist;
+    
+    ros::Time now_marker = ros::Time::now();
+    // Map_pcl_pub = nh.advertise<PointCloud>("Current_Map", 1);
+    // VScan_pcl_pub = nh.advertise<PointCloud>("virtual_Scans", 1);
+    // Free_pcl_pub = nh.advertise<PointCloud>("Free_points", 1);
 
-    Map_pcl_pub = nh.advertise<PointCloud>("Current_Map", 1);
-    VScan_pcl_pub = nh.advertise<PointCloud>("virtual_Scans", 1);
-    Free_pcl_pub = nh.advertise<PointCloud>("Free_points", 1);
+    // map_pcl->header.frame_id = "/velodyne";
+    // map_pcl->height = 1;
+    // map_pcl->width = 0;
 
-    map_pcl->header.frame_id = "/velodyne";
-    map_pcl->height = 1;
-    map_pcl->width = 0;
+    // free_pcl->header.frame_id = "/map";
+    // free_pcl->height = 1;
+    // free_pcl->width = 0;
 
-    free_pcl->header.frame_id = "/map";
-    free_pcl->height = 1;
-    free_pcl->width = 0;
-
-    vsn_pcl->header.frame_id = "/map";
-    vsn_pcl->height = 1;
-    vsn_pcl->width = 0;
+    // vsn_pcl->header.frame_id = "/map";
+    // vsn_pcl->height = 1;
+    // vsn_pcl->width = 0;
    
     double qx, qy, qz, qw;
-    RPY2Quaternion(0, 0, 1, &qx, &qy, &qz, &qw);
-
+    // RPY2Quaternion(0, 0, 1, &qx, &qy, &qz, &qw);
 
     // Initialize parameters 
     // ros::Rate r(10); // 1 hz
@@ -329,22 +325,17 @@ int main(int argc, char **argv) {
     cur_tree_2d = &new_tree_2d;
 
     bool got_tf = false;
-    ros::Time now;
 
     // Update the initial location of the robot
-    cout << "hello" << endl;
     got_tf = false;
     while(!got_tf){
     try{
-        // now = ros::Time::now();
-        // tf_listener->waitForTransform("/map", "/velodyne", now, ros::Duration(1.0));
         tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
         velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
         got_tf = true;
     }
     catch (tf::TransformException ex) {
         ROS_WARN("Wait for tf: velodyne to map"); 
-        ROS_ERROR("%s",ex.what());
     } 
     ros::Duration(0.05).sleep();
     }
@@ -352,15 +343,12 @@ int main(int argc, char **argv) {
     got_tf = false;
     while(!got_tf){
     try{
-        // now = ros::Time::now();
-        // tf_listener->waitForTransform("/map", "/laser", now, ros::Duration(1.0));
         tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
         laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
         got_tf = true;
     }
     catch (tf::TransformException ex) {
         ROS_WARN("Wait for tf: laser to map"); 
-        ROS_ERROR("%s",ex.what());
     } 
     ros::Duration(0.05).sleep();
     }
@@ -372,12 +360,9 @@ int main(int argc, char **argv) {
     bool arrived = goToDest(next_vp, qx, qy, qz, qw);
 
     // Update the initial location of the robot
-    now = ros::Time::now();
     got_tf = false;
     while(!got_tf){
     try{
-        // now = ros::Time::now();
-        // tf_listener->waitForTransform("/map", "/velodyne", now, ros::Duration(1.0));
         tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
         velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
         got_tf = true;
@@ -391,8 +376,6 @@ int main(int argc, char **argv) {
     got_tf = false;
     while(!got_tf){
     try{
-        // now = ros::Time::now();
-        // tf_listener->waitForTransform("/map", "/laser", now, ros::Duration(1.0));
         tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
         laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
         got_tf = true;
@@ -413,8 +396,6 @@ int main(int argc, char **argv) {
     got_tf = false;
     while(!got_tf){
     try{
-        // now = ros::Time::now();
-        // tf_listener->waitForTransform("/map", "/velodyne", now, ros::Duration(1.0));
         tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
         velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
         got_tf = true;
@@ -428,8 +409,6 @@ int main(int argc, char **argv) {
     got_tf = false;
     while(!got_tf){
     try{
-        // now = ros::Time::now();
-        // tf_listener->waitForTransform("/map", "/laser", now, ros::Duration(1.0));
         tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
         laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
         got_tf = true;
@@ -439,37 +418,11 @@ int main(int argc, char **argv) {
     } 
     ros::Duration(0.05).sleep();
     }
-
     // Take a Third Scan
     ros::spinOnce();
 
-    // Visualize current position
-    RPY2Quaternion(0, 0, transform.getRotation().getAngle(), &qx, &qy, &qz, &qw);
-
-    // Publish the jackal_frame as a Marker in rviz
-    visualization_msgs::Marker jackal_frame;
-    jackal_frame.header.frame_id = "map";
-    jackal_frame.header.stamp = ros::Time();
-    jackal_frame.ns = "robot_frame";
-    jackal_frame.id = 0;
-    jackal_frame.type = visualization_msgs::Marker::ARROW;
-    jackal_frame.action = visualization_msgs::Marker::ADD;
-    jackal_frame.pose.position.x = position.x();
-    jackal_frame.pose.position.y = position.y();
-    jackal_frame.pose.position.z = position.z();
-    jackal_frame.pose.orientation.x = qx;
-    jackal_frame.pose.orientation.y = qy;
-    jackal_frame.pose.orientation.z = qz;
-    jackal_frame.pose.orientation.w = qw;
-    jackal_frame.scale.x = 0.5;
-    jackal_frame.scale.y = 0.1;
-    jackal_frame.scale.z = 0.1;
-    jackal_frame.color.a = 1.0; // Don't forget to set the alpha!
-    jackal_frame.color.r = 1.0;
-    jackal_frame.color.g = 0.0;
-    jackal_frame.color.b = 0.0;
-    JackalMarker_pub.publish( jackal_frame );
-
+    // steps robot taken, counter
+    int robot_step_counter = 0;
 
     while (ros::ok())
     {
@@ -488,48 +441,46 @@ int main(int argc, char **argv) {
             eu2dr.rotate_IP(c.second.roll(), c.second.pitch(), c.second.yaw() );
             vector<point3d> hits = cast_sensor_rays(cur_tree, c.first, eu2dr);
             MIs[i] = calc_MI(cur_tree, c.first, hits, before);
-
             // Pick the Best Candidate
             if (MIs[i] > MIs[max_idx])
             {
                 max_idx = i;
             }
         }
-        next_vp = point3d(candidates[max_idx].first.x(),candidates[max_idx].first.y(),candidates[max_idx].first.z());
-        ROS_INFO("Max MI : %f , @ location: %3.2f  %3.2f  %3.2f", MIs[max_idx], next_vp.x(), next_vp.y(), next_vp.z() );
 
+        next_vp = point3d(candidates[max_idx].first.x(),candidates[max_idx].first.y(),candidates[max_idx].first.z());
         RPY2Quaternion(0, 0, candidates[max_idx].second.yaw(), &qx, &qy, &qz, &qw);
+        ROS_INFO("Max MI : %f , @ location: %3.2f  %3.2f  %3.2f", MIs[max_idx], next_vp.x(), next_vp.y(), next_vp.z() );
 
         // Publish the candidates as marker array in rviz
         double tmp_qx, tmp_qy, tmp_qz, tmp_qw;
         RPY2Quaternion(0, PI/2, 0, &tmp_qx, &tmp_qy, &tmp_qz, &tmp_qw);
         
-        marker_array_msg.markers.resize(candidates.size());
+        CandidatesMarker_array.markers.resize(candidates.size());
         for (int i = 0; i < candidates.size(); i++)
         {
-            marker_array_msg.markers[i].header.frame_id = "map";
-            marker_array_msg.markers[i].header.stamp = ros::Time::now();
-            marker_array_msg.markers[i].ns = "candidates";
-            marker_array_msg.markers[i].id = i;
-            marker_array_msg.markers[i].type = visualization_msgs::Marker::ARROW;
-            marker_array_msg.markers[i].action = visualization_msgs::Marker::ADD;
-            marker_array_msg.markers[i].pose.position.x = candidates[i].first.x();
-            marker_array_msg.markers[i].pose.position.y = candidates[i].first.y();
-            marker_array_msg.markers[i].pose.position.z = candidates[i].first.z();
-            marker_array_msg.markers[i].pose.orientation.x = tmp_qx;
-            marker_array_msg.markers[i].pose.orientation.y = tmp_qy;
-            marker_array_msg.markers[i].pose.orientation.z = tmp_qz;
-            marker_array_msg.markers[i].pose.orientation.w = tmp_qw;
-            marker_array_msg.markers[i].scale.x = MIs[i]/MIs[max_idx] + 0.01;
-            marker_array_msg.markers[i].scale.y = 0.05;
-            marker_array_msg.markers[i].scale.z = 0.05;
-            marker_array_msg.markers[i].color.a = MIs[i]/MIs[max_idx] + 0.01;
-            marker_array_msg.markers[i].color.r = 0.0;
-            marker_array_msg.markers[i].color.g = 1.0;
-            marker_array_msg.markers[i].color.b = 0.0;
+            CandidatesMarker_array.markers[i].header.frame_id = "map";
+            CandidatesMarker_array.markers[i].header.stamp = ros::Time::now();
+            CandidatesMarker_array.markers[i].ns = "candidates";
+            CandidatesMarker_array.markers[i].id = i;
+            CandidatesMarker_array.markers[i].type = visualization_msgs::Marker::ARROW;
+            CandidatesMarker_array.markers[i].action = visualization_msgs::Marker::ADD;
+            CandidatesMarker_array.markers[i].pose.position.x = candidates[i].first.x();
+            CandidatesMarker_array.markers[i].pose.position.y = candidates[i].first.y();
+            CandidatesMarker_array.markers[i].pose.position.z = candidates[i].first.z();
+            CandidatesMarker_array.markers[i].pose.orientation.x = tmp_qx;
+            CandidatesMarker_array.markers[i].pose.orientation.y = tmp_qy;
+            CandidatesMarker_array.markers[i].pose.orientation.z = tmp_qz;
+            CandidatesMarker_array.markers[i].pose.orientation.w = tmp_qw;
+            CandidatesMarker_array.markers[i].scale.x = (double)MIs[i]/MIs[max_idx];
+            CandidatesMarker_array.markers[i].scale.y = 0.05;
+            CandidatesMarker_array.markers[i].scale.z = 0.05;
+            CandidatesMarker_array.markers[i].color.a = (double)MIs[i]/MIs[max_idx];
+            CandidatesMarker_array.markers[i].color.r = 0.0;
+            CandidatesMarker_array.markers[i].color.g = 1.0;
+            CandidatesMarker_array.markers[i].color.b = 0.0;
         }
-        Candidates_pub.publish(marker_array_msg);
-
+        Candidates_pub.publish(CandidatesMarker_array);
         candidates.clear();
 
         // Publish the goal as a Marker in rviz
@@ -595,6 +546,42 @@ int main(int argc, char **argv) {
             // Update Octomap
             ros::spinOnce();
             ROS_INFO("Succeed, new Map Free Volume: %f", get_free_volume(cur_tree));
+            robot_step_counter++;
+
+            // Prepare the header for occupied array
+            now_marker = ros::Time::now();
+            OctomapOccupied_cubelist.header.frame_id = "map";
+            OctomapOccupied_cubelist.header.stamp = now_marker;
+            OctomapOccupied_cubelist.ns = "octomap_occupied_array";
+            OctomapOccupied_cubelist.id = 0;
+            OctomapOccupied_cubelist.type = visualization_msgs::Marker::CUBE_LIST;
+            OctomapOccupied_cubelist.action = visualization_msgs::Marker::ADD;
+            OctomapOccupied_cubelist.scale.x = octo_reso;
+            OctomapOccupied_cubelist.scale.y = octo_reso;
+            OctomapOccupied_cubelist.scale.z = octo_reso;
+            OctomapOccupied_cubelist.color.a = 1.0;
+            OctomapOccupied_cubelist.color.r = (double)19/255;
+            OctomapOccupied_cubelist.color.g = (double)121/255;
+            OctomapOccupied_cubelist.color.b = (double)156/255;
+
+            unsigned long int j = 0;
+            geometry_msgs::Point p;
+            for(octomap::OcTree::leaf_iterator n = cur_tree->begin_leafs(cur_tree->getTreeDepth()); n != cur_tree->end_leafs(); ++n) {
+                if(!cur_tree->isNodeOccupied(*n)) continue;
+                p.x = n.getX();
+                p.y = n.getY();
+                p.z = n.getZ();
+                OctomapOccupied_cubelist.points.push_back(p); 
+                j++;
+            }
+            ROS_INFO("Publishing %ld occupied cells", j);
+            Octomap_marker_pub.publish(OctomapOccupied_cubelist);
+
+            // Send out results to file.
+            explo_log_file.open(logfilename, std::ofstream::out | std::ofstream::app);
+            explo_log_file << "DA Step: " << robot_step_counter << "  | Current Entropy: " << get_free_volume(cur_tree) << endl;
+            explo_log_file.close();
+
         }
         else
         {
