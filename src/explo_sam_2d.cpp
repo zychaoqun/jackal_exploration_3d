@@ -327,15 +327,30 @@ int main(int argc, char **argv) {
 
     bool got_tf = false;
 
+    // Update the pose of velodyne from predefined tf.
+    got_tf = false;
+    while(!got_tf){
+    try{
+        tf_listener->lookupTransform("/base_link", "/velodyne", ros::Time(0), transform);
+        velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+        tf::Matrix3x3(transform.getRotation()).getRPY(R_velo, P_velo, Y_velo);
+        Sensor_PrincipalAxis.rotate_IP(R_velo, P_velo, Y_velo);
+        ROS_INFO("Current Velodyne heading: vector(%2.2f, %2.2f, %2.2f) -  RPY(%3.1f, %3.1f, %3.1f).", Sensor_PrincipalAxis.x(), Sensor_PrincipalAxis.y(), Sensor_PrincipalAxis.z(), R_velo/PI*180.0, P_velo/PI*180.0, Y_velo/PI*180.0);
+        got_tf = true;
+        }
+    catch (tf::TransformException ex) {
+        ROS_WARN("Wait for tf: initial pose of Velodyne"); 
+        ros::Duration(0.05).sleep();
+        } 
+    }   
+    
+    
     // Update the initial location of the robot
     got_tf = false;
     while(!got_tf){
     try{
         tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
         velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
-        tf::Matrix3x3(transform.getRotation()).getRPY(R_velo, P_velo, Y_velo);
-        Sensor_PrincipalAxis.rotate_IP(R_velo, P_velo, Y_velo);
-        ROS_INFO("Current Velodyne heading: vector(%2.2f, %2.2f, %2.2f) -  RPY(%3.1f, %3.1f, %3.1f).", Sensor_PrincipalAxis.x(), Sensor_PrincipalAxis.y(), Sensor_PrincipalAxis.z(), R_velo/PI*180.0, P_velo/PI*180.0, Y_velo/PI*180.0);
         got_tf = true;
     }
     catch (tf::TransformException ex) {

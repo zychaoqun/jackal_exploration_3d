@@ -144,7 +144,6 @@ vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig, double i
             candidates.push_back(make_pair<point3d, point3d>(point3d(x, y, z), point3d(0, pitch, yaw)));
             counter++;
         }
-
     // ROS_INFO("Training Poses : %d", counter);
     return candidates;
 }
@@ -336,6 +335,7 @@ int main(int argc, char **argv) {
     // vsn_pcl->width = 0;
    
     double qx, qy, qz, qw;
+    double R_velo, P_velo, Y_velo;
     // RPY2Quaternion(0, 0, 1, &qx, &qy, &qz, &qw);
 
     // Initialize parameters 
@@ -344,7 +344,7 @@ int main(int argc, char **argv) {
 
     position = point3d(0, 0, 0.0);
     // point3d dif_pos = point3d(0,0,0);
-    point3d eu2dr(1, 0, 0);
+    point3d Sensor_PrincipalAxis(1, 0, 0);
     octomap::OcTreeNode *n;
     octomap::OcTree new_tree(octo_reso);
     octomap::OcTree new_tree_2d(octo_reso);
@@ -352,6 +352,23 @@ int main(int argc, char **argv) {
     cur_tree_2d = &new_tree_2d;
 
     bool got_tf = false;
+
+    // Update the pose of velodyne from predefined tf.
+    got_tf = false;
+    while(!got_tf){
+    try{
+        tf_listener->lookupTransform("/base_link", "/velodyne", ros::Time(0), transform);
+        velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+        tf::Matrix3x3(transform.getRotation()).getRPY(R_velo, P_velo, Y_velo);
+        Sensor_PrincipalAxis.rotate_IP(R_velo, P_velo, Y_velo);
+        ROS_INFO("Current Velodyne heading: vector(%2.2f, %2.2f, %2.2f) -  RPY(%3.1f, %3.1f, %3.1f).", Sensor_PrincipalAxis.x(), Sensor_PrincipalAxis.y(), Sensor_PrincipalAxis.z(), R_velo/PI*180.0, P_velo/PI*180.0, Y_velo/PI*180.0);
+        got_tf = true;
+        }
+    catch (tf::TransformException ex) {
+        ROS_WARN("Wait for tf: initial pose of Velodyne"); 
+        ros::Duration(0.05).sleep();
+        } 
+    }   
 
     // Update the initial location of the robot
     got_tf = false;
@@ -471,8 +488,8 @@ int main(int argc, char **argv) {
         {
             auto c = candidates[i];
             // Evaluate Mutual Information
-            eu2dr.rotate_IP(c.second.roll(), c.second.pitch(), c.second.yaw() );
-            vector<point3d> hits = cast_sensor_rays(cur_tree, c.first, eu2dr);
+            Sensor_PrincipalAxis.rotate_IP(c.second.roll(), c.second.pitch(), c.second.yaw() );
+            vector<point3d> hits = cast_sensor_rays(cur_tree, c.first, Sensor_PrincipalAxis);
             MIs[i] = calc_MI(cur_tree, c.first, hits, before);
         }
 
