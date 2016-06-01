@@ -100,14 +100,15 @@ double get_free_volume(const octomap::OcTree *octree) {
 vector<point3d> cast_sensor_rays(const octomap::OcTree *octree, const point3d &position,
                                  const point3d &direction) {
     vector<point3d> hits;
+    point3d direction_copy(direction.normalized());
+    point3d end;
     // octomap::OcTreeNode *n;
 
     // #pragma omp parallel for
     for(auto p_y : Velodyne_puck.pitch_yaws) {
         double pitch = p_y.first;
         double yaw = p_y.second;
-        point3d direction_copy(direction.normalized());
-        point3d end;
+
         direction_copy.rotate_IP(0.0, pitch, yaw);
         if(octree->castRay(position, direction_copy, end, true, Velodyne_puck.max_range)) {
             hits.push_back(end);
@@ -144,7 +145,6 @@ vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig, double i
             candidates.push_back(make_pair<point3d, point3d>(point3d(x, y, z), point3d(0, pitch, yaw)));
             counter++;
         }
-    // ROS_INFO("Training Poses : %d", counter);
     return candidates;
 }
 
@@ -170,8 +170,6 @@ vector<pair<point3d, point3d>> generate_testing(point3d sensor_orig, double init
             candidates.push_back(make_pair<point3d, point3d>(point3d(x, y, z), point3d(0, pitch, yaw)));
             counter++;
         }
-
-    // ROS_INFO("Testing Poses : %d", counter);
     return candidates;
 }
 
@@ -370,7 +368,7 @@ int main(int argc, char **argv) {
         } 
     }   
 
-    // Update the initial location of the robot
+    // Update the initial location of the robot and take the initial scan
     got_tf = false;
     while(!got_tf){
     try{
@@ -403,7 +401,7 @@ int main(int argc, char **argv) {
     RPY2Quaternion(0, 0, 0.5, &qx, &qy, &qz, &qw);
     bool arrived = goToDest(next_vp, qx, qy, qz, qw);
 
-    // Update the initial location of the robot
+    // Update the current location of the robot and take the second scan
     got_tf = false;
     while(!got_tf){
     try{
@@ -436,7 +434,7 @@ int main(int argc, char **argv) {
     RPY2Quaternion(0, 0, 1.0, &qx, &qy, &qz, &qw);
     arrived = goToDest(next_vp, qx, qy, qz, qw);
 
-    // Update the initial location of the robot
+    // Update the location of the robot
     got_tf = false;
     while(!got_tf){
     try{
@@ -469,7 +467,6 @@ int main(int argc, char **argv) {
     
     // steps robot taken, counter
     int robot_step_counter = 0;
-
 
     while (ros::ok())
     {
@@ -526,6 +523,7 @@ int main(int argc, char **argv) {
                 max_idx = i;
             }
         }
+
         // Send the robot to the best action picked by GP 
         next_vp = point3d(gp_test_x(max_idx,0),gp_test_x(max_idx,1),candidates[0].first.z());
         RPY2Quaternion(0, 0, gp_test_poses[max_idx].second.yaw(), &qx, &qy, &qz, &qw);
