@@ -91,24 +91,11 @@ double get_free_volume(const octomap::OcTree *octree) {
     return volume;
 }
 
-// void get_free_points(const octomap::OcTree *octree, PointCloud::Ptr pclPtr) {
-    
-//     for(octomap::OcTree::leaf_iterator n = octree->begin_leafs(octree->getTreeDepth()); n != octree->end_leafs(); ++n) {
-//         if(!octree->isNodeOccupied(*n))
-//         {
-//             pclPtr->points.push_back(pcl::PointXYZ(n.getX()/5.0, n.getY()/5.0, n.getZ()/5.0));
-//             pclPtr->width++;
-//         }
-//     }
-//     return;
-// }
-
 
 octomap::Pointcloud cast_sensor_rays(const octomap::OcTree *octree, const point3d &position,
                                  const point3d &direction) {
     octomap::Pointcloud hits;
 
-    // octomap::OcTreeNode *n;
     octomap::Pointcloud SensorRays_copy;
     SensorRays_copy.push_back(Velodyne_puck.SensorRays);
     SensorRays_copy.rotate(0.0,0.0,direction.z());
@@ -120,9 +107,7 @@ octomap::Pointcloud cast_sensor_rays(const octomap::OcTree *octree, const point3
         } else {
             end = SensorRays_copy.getPoint(i) * Velodyne_puck.max_range;
             end += position;
-            // n = octree->search(direction_copy);
-            // if (!n)                                 continue;
-            // if (n->getOccupancy() < free_prob )     continue;
+
             hits.push_back(end);
         }
     }
@@ -149,20 +134,13 @@ vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig, double i
             candidates.push_back(make_pair<point3d, point3d>(point3d(x, y, z), point3d(0.0, 0.0, yaw)));
             counter++;
         }
-
-    // ROS_INFO("Training Poses : %d", counter);
     return candidates;
 }
 
 double calc_MI(const octomap::OcTree *octree, const point3d &sensor_orig, const octomap::Pointcloud &hits, const double before) {
     auto octree_copy = new octomap::OcTree(*octree);
 
-    // #pragma omp parallel for
     octree_copy->insertPointCloud(hits, sensor_orig, Velodyne_puck.max_range);
-    // for(const auto h : hits) {
-    //     octree_copy->insertRay(sensor_orig, h, Velodyne_puck.max_range);
-    // }
-    // octree_copy->updateInnerOccupancy();
     double after = get_free_volume(octree_copy);
     delete octree_copy;
     return after - before;
@@ -191,14 +169,14 @@ void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
     PointCloud* cloud (new PointCloud);
     PointCloud* cloud_local (new PointCloud);
     pcl::fromPCLPointCloud2(cloud2,*cloud_local);
-    octomap_msgs::Octomap cur_tree_msg;
+    octomap::Pointcloud hits;
 
     ros::Duration(0.07).sleep();
     while(!pcl_ros::transformPointCloud("/map", *cloud_local, *cloud, *tf_listener))
     {
         ros::Duration(0.01).sleep();
     }
-
+    hits.push_back(cloud);
     // Insert points into octomap one by one...
     for (int j = 1; j< cloud->width; j++)
     {
@@ -206,27 +184,10 @@ void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
         cur_tree->insertRay(point3d( velo_orig.x(),velo_orig.y(),velo_orig.z()), 
             point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), Velodyne_puck.max_range);
     }
-    // cur_tree->updateInnerOccupancy();
-    // Insert point cloud into octomap.
-    // cur_tree->insertPointCloud(*cloud,velo_orig);
 
-    // bool res = octomap_msgs::fullMapToMsg(*cur_tree, cur_tree_msg);
-    // if(res)
-    //     ROS_INFO("octomap msg got it!");
-    // else
-    //     ROS_ERROR("Failed to convert octomap to msg...");
-    // cur_tree_msg.header.seq = octomap_seq++;
-    // cur_tree_msg.header.frame_id = "/map";
-    // cur_tree_msg.header.stamp = cloud2_msg->header.stamp;
-    // cur_tree_msg.resolution = octo_reso;
-    // cur_tree_msg.binary = true;
-    // cur_tree_msg.id = "OcTree";
-    
     ROS_INFO("Entropy(3d map) : %f", get_free_volume(cur_tree));
 
-    // cur_tree->writeBinary("Octomap_DA.bt");
     cur_tree->write(octomap_name_3d);
-    // octomap_pub.publish(cur_tree_msg);
     delete cloud;
     delete cloud_local;
 }
@@ -298,32 +259,16 @@ int main(int argc, char **argv) {
     visualization_msgs::Marker OctomapOccupied_cubelist;
     
     ros::Time now_marker = ros::Time::now();
-    // Map_pcl_pub = nh.advertise<PointCloud>("Current_Map", 1);
-    // VScan_pcl_pub = nh.advertise<PointCloud>("virtual_Scans", 1);
-    // Free_pcl_pub = nh.advertise<PointCloud>("Free_points", 1);
 
-    // map_pcl->header.frame_id = "/velodyne";
-    // map_pcl->height = 1;
-    // map_pcl->width = 0;
-
-    // free_pcl->header.frame_id = "/map";
-    // free_pcl->height = 1;
-    // free_pcl->width = 0;
-
-    // vsn_pcl->header.frame_id = "/map";
-    // vsn_pcl->height = 1;
-    // vsn_pcl->width = 0;
    
     double qx, qy, qz, qw;
     double R_velo, P_velo, Y_velo;
-    // RPY2Quaternion(0, 0, 1, &qx, &qy, &qz, &qw);
 
     // Initialize parameters 
     // ros::Rate r(10); // 1 hz
     int max_idx = 0;
 
     position = point3d(0, 0, 0.0);
-    // point3d dif_pos = point3d(0,0,0);
     point3d Sensor_PrincipalAxis(1, 0, 0);
     octomap::OcTreeNode *n;
     octomap::OcTree new_tree(octo_reso);
