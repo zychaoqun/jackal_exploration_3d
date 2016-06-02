@@ -116,7 +116,7 @@ octomap::Pointcloud cast_sensor_rays(const octomap::OcTree *octree, const point3
     // #pragma omp parallel for
     for(int i = 0; i < SensorRays_copy.size(); i++) {
         if(octree->castRay(position, SensorRays_copy.getPoint(i), end, true, Velodyne_puck.max_range)) {
-            hits.push_back(end);
+            // hits.push_back(end);
         } else {
             end = SensorRays_copy.getPoint(i) * Velodyne_puck.max_range;
             end += position;
@@ -206,7 +206,7 @@ void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
         cur_tree->insertRay(point3d( velo_orig.x(),velo_orig.y(),velo_orig.z()), 
             point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), Velodyne_puck.max_range);
     }
-    cur_tree->updateInnerOccupancy();
+    // cur_tree->updateInnerOccupancy();
     // Insert point cloud into octomap.
     // cur_tree->insertPointCloud(*cloud,velo_orig);
 
@@ -254,7 +254,7 @@ void hokuyo_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg )
         cur_tree_2d->insertRay(point3d( laser_orig.x(),laser_orig.y(),laser_orig.z()), 
             point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), 20.0);
     }
-    cur_tree_2d->updateInnerOccupancy();
+    // cur_tree_2d->updateInnerOccupancy();
     ROS_INFO("Entropy(2d map) : %f", get_free_volume(cur_tree_2d));
     cur_tree_2d->write(octomap_name_2d);
     delete cloud;
@@ -274,12 +274,12 @@ int main(int argc, char **argv) {
     char buffer[80];
     time (&rawtime);
     timeinfo = localtime(&rawtime);
-    strftime(buffer,80,"%R_%M%S_%m%d_DA.txt",timeinfo);
+    strftime(buffer,80,"%R_%S_%m%d_DA.txt",timeinfo);
     std::string logfilename(buffer);
     std::cout << logfilename << endl;
-    strftime(buffer,80,"octomap_2d_%R_%M%S_%m%d_DA.ot",timeinfo);
+    strftime(buffer,80,"octomap_2d_%R_%S_%m%d_DA.ot",timeinfo);
     octomap_name_2d = buffer;
-    strftime(buffer,80,"octomap_3d_%R_%M%S_%m%d_DA.ot",timeinfo);
+    strftime(buffer,80,"octomap_3d_%R_%S_%m%d_DA.ot",timeinfo);
     octomap_name_3d = buffer;
 
 
@@ -460,14 +460,22 @@ int main(int argc, char **argv) {
         max_idx = 0;
 
         // for every candidate...
+        double Secs_CastRay, Secs_InsertRay, Secs_tmp;
+        Secs_InsertRay = 0;
+        Secs_CastRay = 0;
+
         #pragma omp parallel for
         for(int i = 0; i < candidates.size(); i++) 
         {
             auto c = candidates[i];
             // Evaluate Mutual Information
+            Secs_tmp = ros::Time::now().toSec();
             Sensor_PrincipalAxis.rotate_IP(c.second.roll(), c.second.pitch(), c.second.yaw() );
             octomap::Pointcloud hits = cast_sensor_rays(cur_tree, c.first, Sensor_PrincipalAxis);
+            Secs_CastRay += ros::Time::now().toSec() - Secs_tmp;
+            Secs_tmp = ros::Time::now().toSec();
             MIs[i] = calc_MI(cur_tree, c.first, hits, before);
+            Secs_InsertRay += ros::Time::now().toSec() - Secs_tmp;
             // Pick the Best Candidate
             if (MIs[i] > MIs[max_idx])
             {
@@ -478,6 +486,7 @@ int main(int argc, char **argv) {
         next_vp = point3d(candidates[max_idx].first.x(),candidates[max_idx].first.y(),candidates[max_idx].first.z());
         RPY2Quaternion(0, 0, candidates[max_idx].second.yaw(), &qx, &qy, &qz, &qw);
         ROS_INFO("Max MI : %f , @ location: %3.2f  %3.2f  %3.2f", MIs[max_idx], next_vp.x(), next_vp.y(), next_vp.z() );
+        ROS_INFO("CastRay Time: %2.3f Secs. InsertRay Time: %2.3f Secs.", Secs_CastRay, Secs_InsertRay);
 
         // Publish the candidates as marker array in rviz
         double tmp_qx, tmp_qy, tmp_qz, tmp_qw;
