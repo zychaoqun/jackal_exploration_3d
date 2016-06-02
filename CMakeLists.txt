@@ -130,6 +130,7 @@ add_library(navigation_utils    src/navigation_utils.cpp)
 # add_executable(explo_octo_3d_node src/explo_octo_3d_node.cpp)
 add_executable(navigation           src/navigation_utils.cpp)
 add_executable(explo_sam_2d         src/explo_sam_2d.cpp )
+add_executable(explo_sam_2d_new     src/explo_sam_2d_new.cpp )
 add_executable(explo_gp_2d          src/explo_gp_2d.cpp src/gpregressor.cpp  src/covMaterniso3.cpp)
 # add_executable(simu_explo           src/explo_octo_3d_node.cpp src/gpregressor.cpp  src/covMaterniso3.cpp)
 # add_executable(simu_gazebo          src/simu_gazebo.cpp)
@@ -149,6 +150,12 @@ add_executable(scan_to_pcl          src/scan_to_pcl.cpp)
 # )
 
 target_link_libraries(explo_sam_2d
+  ${catkin_LIBRARIES}
+  ${OCTOMAP_LIBRARIES}
+  navigation_utils
+)
+
+target_link_libraries(explo_sam_2d_new
   ${catkin_LIBRARIES}
   ${OCTOMAP_LIBRARIES}
   navigation_utils
