@@ -1,4 +1,6 @@
 #include "navigation_utils.h"
+#include <tf/transform_listener.h>
+
 
 void RPY2Quaternion(double roll, double pitch, double yaw, double *x, double *y, double *z, double *w) {
     double cr2, cp2, cy2, sr2, sp2, sy2;
@@ -16,7 +18,8 @@ void RPY2Quaternion(double roll, double pitch, double yaw, double *x, double *y,
     *z = cr2*cp2*sy2 - sr2*sp2*cy2;
 }
 
-bool goToDest(point3d go_posi, double qx, double qy, double qz, double qw) {
+// bool goToDest(point3d go_posi, double qx, double qy, double qz, double qw) {
+bool goToDest(point3d go_posi, tf::Quaternion q) {
 
   // make an action client that spins up a thread
   MoveBaseClient ac("move_base", true);
@@ -40,10 +43,10 @@ bool goToDest(point3d go_posi, double qx, double qy, double qz, double qw) {
   // goal.target_pose.pose.position.x = cur_posi.x();
   // goal.target_pose.pose.position.y = cur_posi.y();
   // goal.target_pose.pose.position.z = cur_posi.z();
-  goal.target_pose.pose.orientation.x = qx;
-  goal.target_pose.pose.orientation.y = qy;
-  goal.target_pose.pose.orientation.z = qz;
-  goal.target_pose.pose.orientation.w = qw;
+  goal.target_pose.pose.orientation.x = q.x();
+  goal.target_pose.pose.orientation.y = q.y();
+  goal.target_pose.pose.orientation.z = q.z();
+  goal.target_pose.pose.orientation.w = q.w();
 
   ROS_INFO("Sending goal to (%3.2f, %3.2f, %3.2f)", go_posi.x(), go_posi.y(), go_posi.z());
   ac.sendGoal(goal);
@@ -60,25 +63,25 @@ bool goToDest(point3d go_posi, double qx, double qy, double qz, double qw) {
 
 int main(int argc, char** argv){
   ros::init(argc, argv, "navigation_utils");
-  point3d cur_posi(0,0,0);
+  // point3d cur_posi(0,0,0);
 
-  double qx, qy, qz, qw;
-  RPY2Quaternion(0, 0, 1, &qx, &qy, &qz, &qw);
+  // double qx, qy, qz, qw;
+  // RPY2Quaternion(0, 0, 1, &qx, &qy, &qz, &qw);
 
-  point3d posi1(1.0,0.0,0);
-  bool arrived = goToDest(posi1, qx, qy, qz, qw);
+  // point3d posi1(1.0,0.0,0);
+  // bool arrived = goToDest(posi1, qx, qy, qz, qw);
 
-  posi1 = point3d(0.0,0.0,0);
-  RPY2Quaternion(0, 0, -1, &qx, &qy, &qz, &qw);
-   arrived = goToDest(posi1, qx, qy, qz, qw);
+  // posi1 = point3d(0.0,0.0,0);
+  // RPY2Quaternion(0, 0, -1, &qx, &qy, &qz, &qw);
+  //  arrived = goToDest(posi1, qx, qy, qz, qw);
 
-   //   go_posi = point3d(0.2,0.1,0);
-   // arrived = goToDest(go_posi, 0, 0, 0, 1.0);
+  //  //   go_posi = point3d(0.2,0.1,0);
+  //  // arrived = goToDest(go_posi, 0, 0, 0, 1.0);
 
-  if(arrived)
-    ROS_INFO("We moved forward one meter!");
-  else
-    ROS_INFO("We could not move forward one meter for some reason");
+  // if(arrived)
+  //   ROS_INFO("We moved forward one meter!");
+  // else
+  //   ROS_INFO("We could not move forward one meter for some reason");
 
   return 0;
 }

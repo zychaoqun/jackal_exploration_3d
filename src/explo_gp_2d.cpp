@@ -312,6 +312,7 @@ int main(int argc, char **argv) {
 
     tf_listener = new tf::TransformListener();
     tf::StampedTransform transform;
+    tf::Quaternion Goal_heading;
 
     visualization_msgs::MarkerArray CandidatesMarker_array;
     visualization_msgs::Marker OctomapOccupied_cubelist;
@@ -332,7 +333,6 @@ int main(int argc, char **argv) {
     // vsn_pcl->height = 1;
     // vsn_pcl->width = 0;
    
-    double qx, qy, qz, qw;
     double R_velo, P_velo, Y_velo;
     // RPY2Quaternion(0, 0, 1, &qx, &qy, &qz, &qw);
 
@@ -341,6 +341,7 @@ int main(int argc, char **argv) {
     int max_idx = 0;
 
     position = point3d(0, 0, 0.0);
+    point3d next_vp;
     // point3d dif_pos = point3d(0,0,0);
     point3d Sensor_PrincipalAxis(1, 0, 0);
     octomap::OcTreeNode *n;
@@ -397,9 +398,9 @@ int main(int argc, char **argv) {
 
     ROS_INFO("Initial  Position : %3.2f, %3.2f, %3.2f - Yaw : %3.1f ", laser_orig.x(), laser_orig.y(), laser_orig.z(), transform.getRotation().getAngle()*PI/180);
 
-    point3d next_vp(laser_orig.x(), laser_orig.y(),laser_orig.z());
-    RPY2Quaternion(0, 0, 0.5, &qx, &qy, &qz, &qw);
-    bool arrived = goToDest(next_vp, qx, qy, qz, qw);
+    Goal_heading.setRPY(0.0, 0.0, 0.5);
+    Goal_heading.normalize();
+    bool arrived = goToDest(laser_orig, Goal_heading);
 
     // Update the current location of the robot and take the second scan
     got_tf = false;
@@ -431,8 +432,9 @@ int main(int argc, char **argv) {
     // Take a Second Scan
     ros::spinOnce();
 
-    RPY2Quaternion(0, 0, 1.0, &qx, &qy, &qz, &qw);
-    arrived = goToDest(next_vp, qx, qy, qz, qw);
+    Goal_heading.setRPY(0.0, 0.0, 1.0);
+    Goal_heading.normalize();
+    arrived = goToDest(laser_orig, Goal_heading);
 
     // Update the location of the robot
     got_tf = false;
@@ -491,7 +493,7 @@ int main(int argc, char **argv) {
         }
 
         // Initialize gp regression
-        GPRegressor g(1, 1, 1);
+        GPRegressor g(100, 2, 0.01);
         MatrixXf gp_train_x(candidates.size(), 2), gp_train_label(candidates.size(), 1), gp_test_x(gp_test_poses.size(), 2);
 
         for (int i=0; i< candidates.size(); i++){
@@ -526,13 +528,15 @@ int main(int argc, char **argv) {
 
         // Send the robot to the best action picked by GP 
         next_vp = point3d(gp_test_x(max_idx,0),gp_test_x(max_idx,1),candidates[0].first.z());
-        RPY2Quaternion(0, 0, gp_test_poses[max_idx].second.yaw(), &qx, &qy, &qz, &qw);
+        Goal_heading.setRPY(0.0, 0.0, candidates[max_idx].second.yaw());
+        Goal_heading.normalize();
         ROS_INFO("Estimated Max MI : %f , @ %3.2f,  %3.2f,  %3.2f", m(max_idx), next_vp.x(), next_vp.y(), next_vp.z() );
 
 
         // Publish the MIs of candidate actions as marker array in rviz
-        double tmp_qx, tmp_qy, tmp_qz, tmp_qw;
-        RPY2Quaternion(0, PI/2, 0, &tmp_qx, &tmp_qy, &tmp_qz, &tmp_qw);
+        tf::Quaternion MI_heading;
+        MI_heading.setRPY(0.0, -PI/2, 0.0);
+        MI_heading.normalize();
         
         CandidatesMarker_array.markers.resize(gp_test_poses.size());
         ros::Time now_marker = ros::Time::now();
@@ -547,10 +551,10 @@ int main(int argc, char **argv) {
             CandidatesMarker_array.markers[i].pose.position.x = gp_test_x(i,0);
             CandidatesMarker_array.markers[i].pose.position.y = gp_test_x(i,1);
             CandidatesMarker_array.markers[i].pose.position.z = 0.0;
-            CandidatesMarker_array.markers[i].pose.orientation.x = tmp_qx;
-            CandidatesMarker_array.markers[i].pose.orientation.y = tmp_qy;
-            CandidatesMarker_array.markers[i].pose.orientation.z = tmp_qz;
-            CandidatesMarker_array.markers[i].pose.orientation.w = tmp_qw;
+            CandidatesMarker_array.markers[i].pose.orientation.x = MI_heading.x();
+            CandidatesMarker_array.markers[i].pose.orientation.y = MI_heading.y();
+            CandidatesMarker_array.markers[i].pose.orientation.z = MI_heading.z();
+            CandidatesMarker_array.markers[i].pose.orientation.w = MI_heading.w();
             CandidatesMarker_array.markers[i].scale.x = m(i)/m(max_idx) + 0.01;
             CandidatesMarker_array.markers[i].scale.y = 0.05;
             CandidatesMarker_array.markers[i].scale.z = 0.05;
@@ -573,10 +577,10 @@ int main(int argc, char **argv) {
         marker.pose.position.x = next_vp.x();
         marker.pose.position.y = next_vp.y();
         marker.pose.position.z = next_vp.z();
-        marker.pose.orientation.x = qx;
-        marker.pose.orientation.y = qy;
-        marker.pose.orientation.z = qz;
-        marker.pose.orientation.w = qw;
+        marker.pose.orientation.x = Goal_heading.x();
+        marker.pose.orientation.y = Goal_heading.y();
+        marker.pose.orientation.z = Goal_heading.z();
+        marker.pose.orientation.w = Goal_heading.w();
         marker.scale.x = 0.5;
         marker.scale.y = 0.1;
         marker.scale.z = 0.1;
@@ -587,7 +591,7 @@ int main(int argc, char **argv) {
         GoalMarker_pub.publish( marker );
 
         // Send the Robot 
-        arrived = goToDest(next_vp, qx, qy, qz, qw);
+        arrived = goToDest(next_vp, Goal_heading);
 
         if(arrived)
         {
