@@ -12,7 +12,6 @@
 #include "pcl_ros/transforms.h"
 
 #include <octomap/octomap.h>
-// #include <octomap/Pointcloud.h>
 #include <ros/ros.h>
 #include <pcl_ros/point_cloud.h>
 #include <visualization_msgs/Marker.h>
@@ -21,14 +20,12 @@
 #include <octomap_msgs/Octomap.h>
 #include <octomap_msgs/conversions.h>
 #include <octomap_msgs/GetOctomap.h>
-// #include <tf/transform_broadcaster.h>
 #include "navigation_utils.h"
-// #include "laser_geometry/laser_geometry.h"
 #include <ros/callback_queue.h>
 
 
 using namespace std;
-using namespace std::chrono;
+// using namespace std::chrono;
 
 typedef octomap::point3d point3d;
 typedef pcl::PointXYZ PointType;
@@ -107,7 +104,6 @@ octomap::Pointcloud cast_sensor_rays(const octomap::OcTree *octree, const point3
         } else {
             end = SensorRays_copy.getPoint(i) * Velodyne_puck.max_range;
             end += position;
-
             hits.push_back(end);
         }
     }
@@ -117,7 +113,6 @@ octomap::Pointcloud cast_sensor_rays(const octomap::OcTree *octree, const point3
 vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig, double initial_yaw) {
     double R = 0.5;   // Robot step, in meters.
     double n = 3;
-    int counter = 0;
     octomap::OcTreeNode *n_cur;
 
     vector<pair<point3d, point3d>> candidates;
@@ -128,11 +123,31 @@ vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig, double i
         for(double yaw = initial_yaw-PI/2; yaw < initial_yaw+PI/2; yaw += PI / (2*n) ) {
             x = sensor_orig.x() + R * cos(yaw);
             y = sensor_orig.y() + R * sin(yaw);
-            n_cur = cur_tree_2d->search(point3d(x,y,z),15);
-            if(!n_cur)                                  continue;
-            if(n_cur->getOccupancy() > free_prob)       continue;
-            candidates.push_back(make_pair<point3d, point3d>(point3d(x, y, z), point3d(0.0, 0.0, yaw)));
-            counter++;
+
+            // for every candidate goal, check surroundings
+            bool candidate_valid = true;
+            for (double x_buf = x - 0.3; x_buf < x + 0.3; x_buf += octo_reso) 
+                for (double y_buf = y - 0.3; y_buf < y + 0.3; y_buf += octo_reso)
+                    for (double z_buf = z - 0.2; z_buf < z + 0.1; z_buf += octo_reso)
+            {
+                n_cur = cur_tree_2d->search(point3d(x_buf, y_buf, z_buf));
+                if(!n_cur) {
+                    // ROS_WARN("Part of (%f, %f, %f) unknown", x_buf, y_buf, z_buf);
+                    // candidate_valid = false;
+                    continue;
+                }                                 
+                if(cur_tree_2d->isNodeOccupied(n_cur)) {
+                    // ROS_WARN("Part of (%f, %f, %f) occupied", x_buf, y_buf, z_buf);
+                    candidate_valid = false;
+                }  
+            }
+            if (candidate_valid)
+            {
+                candidates.push_back(make_pair<point3d, point3d>(point3d(x, y, z), point3d(0.0, 0.0, yaw)));
+            }
+            else
+                ROS_WARN("Part of Candidtae(%f, %f, %f) occupied", x, y, z);
+            
         }
     return candidates;
 }
@@ -140,7 +155,7 @@ vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig, double i
 double calc_MI(const octomap::OcTree *octree, const point3d &sensor_orig, const octomap::Pointcloud &hits, const double before) {
     auto octree_copy = new octomap::OcTree(*octree);
 
-    octree_copy->insertPointCloud(hits, sensor_orig, Velodyne_puck.max_range);
+    octree_copy->insertPointCloud(hits, sensor_orig, Velodyne_puck.max_range, true, true);
     double after = get_free_volume(octree_copy);
     delete octree_copy;
     return after - before;
@@ -176,15 +191,19 @@ void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
     {
         ros::Duration(0.01).sleep();
     }
-    hits.push_back(cloud);
+    // hits.push_back(point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z));
     // Insert points into octomap one by one...
     for (int j = 1; j< cloud->width; j++)
     {
-        if(isnan(cloud->at(j).x)) continue;
-        cur_tree->insertRay(point3d( velo_orig.x(),velo_orig.y(),velo_orig.z()), 
-            point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), Velodyne_puck.max_range);
+        // if(isnan(cloud->at(j).x)) continue;
+        if(cloud->at(j).z < -1.0)    continue;  
+        hits.push_back(point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z));
+        // cur_tree->insertRay(point3d( velo_orig.x(),velo_orig.y(),velo_orig.z()), 
+        //     point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), Velodyne_puck.max_range);
     }
 
+    cur_tree->insertPointCloud(hits, velo_orig, Velodyne_puck.max_range);
+    // cur_tree->updateInnerOccupancy();
     ROS_INFO("Entropy(3d map) : %f", get_free_volume(cur_tree));
 
     cur_tree->write(octomap_name_3d);
@@ -199,6 +218,7 @@ void hokuyo_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg )
     PointCloud* cloud (new PointCloud);
     PointCloud* cloud_local (new PointCloud);
     pcl::fromPCLPointCloud2(cloud2,*cloud_local);
+    octomap::Pointcloud hits;
 
     ros::Duration(0.07).sleep();
     while(!pcl_ros::transformPointCloud("/map", *cloud_local, *cloud, *tf_listener))
@@ -209,12 +229,12 @@ void hokuyo_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg )
     // Insert points into octomap one by one...
     for (int j = 1; j< cloud->width; j++)
     {
-        if(isnan(cloud->at(j).x)) continue;
-        // cur_tree->insertRay(point3d( laser_orig.x(),laser_orig.y(),laser_orig.z()), 
-        //     point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), Velodyne_puck.max_range);
-        cur_tree_2d->insertRay(point3d( laser_orig.x(),laser_orig.y(),laser_orig.z()), 
-            point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), 20.0);
+        // if(isnan(cloud->at(j).x)) continue;
+        hits.push_back(point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z));
+        // cur_tree_2d->insertRay(point3d( laser_orig.x(),laser_orig.y(),laser_orig.z()), 
+        //     point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), 30.0);
     }
+    cur_tree_2d->insertPointCloud(hits, laser_orig, Velodyne_puck.max_range);
     // cur_tree_2d->updateInnerOccupancy();
     ROS_INFO("Entropy(2d map) : %f", get_free_volume(cur_tree_2d));
     cur_tree_2d->write(octomap_name_2d);
@@ -329,7 +349,7 @@ int main(int argc, char **argv) {
 
     point3d next_vp(laser_orig.x(), laser_orig.y(),laser_orig.z());
     RPY2Quaternion(0, 0, 0.5, &qx, &qy, &qz, &qw);
-    bool arrived = goToDest(next_vp, qx, qy, qz, qw);
+    bool arrived = goToDest(laser_orig, qx, qy, qz, qw);
 
     // Update the initial location of the robot
     got_tf = false;
@@ -361,8 +381,9 @@ int main(int argc, char **argv) {
     // Take a Second Scan
     ros::spinOnce();
 
+
     RPY2Quaternion(0, 0, 1.0, &qx, &qy, &qz, &qw);
-    arrived = goToDest(next_vp, qx, qy, qz, qw);
+    arrived = goToDest(laser_orig, qx, qy, qz, qw);
 
     // Update the initial location of the robot
     got_tf = false;
@@ -400,6 +421,28 @@ int main(int argc, char **argv) {
     {
         // Generate Candidates
         vector<pair<point3d, point3d>> candidates = generate_candidates(laser_orig, transform.getRotation().getAngle());
+        while(candidates.size() <= 1)
+        {
+            // Get the current heading
+            got_tf = false;
+            while(!got_tf){
+            try{
+                tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
+                laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+                got_tf = true;
+            }
+            catch (tf::TransformException ex) {
+                ROS_WARN("Wait for tf: laser to map"); 
+            } 
+            ros::Duration(0.05).sleep();
+            }
+            // Rotate negative along Yaw for 30 deg to look for more open areas
+            RPY2Quaternion(0, 0, transform.getRotation().getAngle() - PI/6 , &qx, &qy, &qz, &qw);
+            arrived = goToDest(laser_orig, qx, qy, qz, qw);
+            vector<pair<point3d, point3d>> candidates = generate_candidates(laser_orig, transform.getRotation().getAngle());
+        }
+        
+        ROS_INFO("%lu candidates generated.", candidates.size());
         vector<double> MIs(candidates.size());
         double before = get_free_volume(cur_tree);
         max_idx = 0;
@@ -409,7 +452,7 @@ int main(int argc, char **argv) {
         Secs_InsertRay = 0;
         Secs_CastRay = 0;
 
-        #pragma omp parallel for
+        // #pragma omp parallel for
         for(int i = 0; i < candidates.size(); i++) 
         {
             auto c = candidates[i];
@@ -540,7 +583,7 @@ int main(int argc, char **argv) {
             OctomapOccupied_cubelist.scale.x = octo_reso;
             OctomapOccupied_cubelist.scale.y = octo_reso;
             OctomapOccupied_cubelist.scale.z = octo_reso;
-            OctomapOccupied_cubelist.color.a = 1.0;
+            OctomapOccupied_cubelist.color.a = 0.5;
             OctomapOccupied_cubelist.color.r = (double)19/255;
             OctomapOccupied_cubelist.color.g = (double)121/255;
             OctomapOccupied_cubelist.color.b = (double)156/255;
