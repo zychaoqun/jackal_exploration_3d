@@ -255,7 +255,7 @@ int main(int argc, char **argv) {
     char buffer[80];
     time (&rawtime);
     timeinfo = localtime(&rawtime);
-    strftime(buffer,80,"%R_%S_%m%d_DA.txt",timeinfo);
+    strftime(buffer,80,"Trajectory_%R_%S_%m%d_DA.txt",timeinfo);
     std::string logfilename(buffer);
     std::cout << logfilename << endl;
     strftime(buffer,80,"octomap_2d_%R_%S_%m%d_DA.ot",timeinfo);
@@ -343,15 +343,17 @@ int main(int argc, char **argv) {
     } 
     ros::Duration(0.05).sleep();
     }
-
     ROS_INFO("Initial  Position : %3.2f, %3.2f, %3.2f - Yaw : %3.1f ", laser_orig.x(), laser_orig.y(), laser_orig.z(), transform.getRotation().getAngle()*PI/180);
+    // Take a Initial Scan
+    ros::spinOnce();
 
+    // Rotate ~60 degrees 
     point3d next_vp(laser_orig.x(), laser_orig.y(),laser_orig.z());
-    Goal_heading.setRPY(0.0, 0.0, 0.5);
+    Goal_heading.setRPY(0.0, 0.0, transform.getRotation().getAngle()+0.5233);
     Goal_heading.normalize();
     bool arrived = goToDest(laser_orig, Goal_heading);
 
-    // Update the initial location of the robot
+    // Update the pose of the robot
     got_tf = false;
     while(!got_tf){
     try{
@@ -381,10 +383,45 @@ int main(int argc, char **argv) {
     // Take a Second Scan
     ros::spinOnce();
 
-    Goal_heading.setRPY(0.0, 0.0, 1.0);
+    // Rotate another 60 degrees
+    Goal_heading.setRPY(0.0, 0.0, transform.getRotation().getAngle()+0.5233);
     arrived = goToDest(laser_orig, Goal_heading);
 
-    // Update the initial location of the robot
+    // Update the pose of the robot
+    got_tf = false;
+    while(!got_tf){
+    try{
+        tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
+        velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+        got_tf = true;
+    }
+    catch (tf::TransformException ex) {
+        ROS_WARN("Wait for tf: velodyne to map"); 
+    } 
+    ros::Duration(0.05).sleep();
+    }
+
+    got_tf = false;
+    while(!got_tf){
+    try{
+        tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
+        laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+        got_tf = true;
+    }
+    catch (tf::TransformException ex) {
+        ROS_WARN("Wait for tf: laser to map"); 
+    } 
+    ros::Duration(0.05).sleep();
+    }
+
+    // Take a Third Scan
+    ros::spinOnce();
+
+    // Rotate another 60 degrees
+    Goal_heading.setRPY(0.0, 0.0, transform.getRotation().getAngle()+0.5233);
+    arrived = goToDest(laser_orig, Goal_heading);
+
+    // Update the pose of the robot
     got_tf = false;
     while(!got_tf){
     try{
