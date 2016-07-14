@@ -113,7 +113,7 @@ octomap::Pointcloud cast_sensor_rays(const octomap::OcTree *octree, const point3
 }
 
 vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig, double initial_yaw) {
-    double R = 0.5;   // Robot step, in meters.
+    double R = 1.0;   // Robot step, in meters.
     double n = 3;
     octomap::OcTreeNode *n_cur;
 
@@ -128,9 +128,9 @@ vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig, double i
 
             // for every candidate goal, check surroundings
             bool candidate_valid = true;
-            for (double x_buf = x - 0.3; x_buf < x + 0.3; x_buf += octo_reso) 
-                for (double y_buf = y - 0.3; y_buf < y + 0.3; y_buf += octo_reso)
-                    for (double z_buf = z - 0.2; z_buf < z + 0.1; z_buf += octo_reso)
+            for (double x_buf = x - 0.1; x_buf < x + 0.1; x_buf += octo_reso/2) 
+                for (double y_buf = y - 0.1; y_buf < y + 0.1; y_buf += octo_reso/2)
+                    for (double z_buf = z - 0.1; z_buf < z + 0.1; z_buf += octo_reso/2)
             {
                 n_cur = cur_tree_2d->search(point3d(x_buf, y_buf, z_buf));
                 if(!n_cur) {
@@ -157,7 +157,7 @@ vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig, double i
 
 
 vector<pair<point3d, point3d>> generate_testing(point3d sensor_orig, double initial_yaw) {
-    double R = 0.5;   // Robot step, in meters.
+    double R = 1.0;   // Robot step, in meters.
     double n = 10;
     int counter = 0;
     octomap::OcTreeNode *n_cur;
@@ -173,9 +173,9 @@ vector<pair<point3d, point3d>> generate_testing(point3d sensor_orig, double init
 
             // for every candidate goal, check surroundings
             bool candidate_valid = true;
-            for (double x_buf = x - 0.3; x_buf < x + 0.3; x_buf += octo_reso) 
-                for (double y_buf = y - 0.3; y_buf < y + 0.3; y_buf += octo_reso)
-                    for (double z_buf = z - 0.2; z_buf < z + 0.1; z_buf += octo_reso)
+            for (double x_buf = x - 0.1; x_buf < x + 0.1; x_buf += octo_reso/2) 
+                for (double y_buf = y - 0.1; y_buf < y + 0.1; y_buf += octo_reso/2)
+                    for (double z_buf = z - 0.1; z_buf < z + 0.1; z_buf += octo_reso/2)
             {
                 n_cur = cur_tree_2d->search(point3d(x_buf, y_buf, z_buf));
                 if(!n_cur) {
