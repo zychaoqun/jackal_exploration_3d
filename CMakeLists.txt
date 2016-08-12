@@ -136,7 +136,7 @@ add_executable(explo_gp_2d_new      src/explo_gp_2d_new.cpp src/gpregressor.cpp 
 # add_executable(simu_explo           src/explo_octo_3d_node.cpp src/gpregressor.cpp  src/covMaterniso3.cpp)
 # add_executable(simu_gazebo          src/simu_gazebo.cpp)
 add_executable(save_to_ply          src/save_ply.cpp)
-add_executable(isam_ros             src/isam_example.cpp)
+# add_executable(isam_ros             src/isam_example.cpp)
 add_executable(scan_to_pcl          src/scan_to_pcl.cpp)
 
 
@@ -192,9 +192,9 @@ target_link_libraries(scan_to_pcl
   ${catkin_LIBRARIES}
 )
 
-target_link_libraries(isam_ros
-  ${catkin_LIBRARIES} isam cholmod
-)
+# target_link_libraries(isam_ros
+#   ${catkin_LIBRARIES} isam cholmod
+# )
 
 #############
 ## Install ##

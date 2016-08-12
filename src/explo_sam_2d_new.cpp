@@ -255,12 +255,12 @@ int main(int argc, char **argv) {
     char buffer[80];
     time (&rawtime);
     timeinfo = localtime(&rawtime);
-    strftime(buffer,80,"Trajectory_%R_%S_%m%d_DA.txt",timeinfo);
+    strftime(buffer,80,"Trajectory_%m%d_%R_%S_DA.txt",timeinfo);
     std::string logfilename(buffer);
     std::cout << logfilename << endl;
-    strftime(buffer,80,"octomap_2d_%R_%S_%m%d_DA.ot",timeinfo);
+    strftime(buffer,80,"octomap_2d_%m%d_%R_%S_DA.ot",timeinfo);
     octomap_name_2d = buffer;
-    strftime(buffer,80,"octomap_3d_%R_%S_%m%d_DA.ot",timeinfo);
+    strftime(buffer,80,"octomap_3d_%m%d_%R_%S_DA.ot",timeinfo);
     octomap_name_3d = buffer;
 
 
@@ -556,7 +556,7 @@ int main(int argc, char **argv) {
         marker.action = visualization_msgs::Marker::ADD;
         marker.pose.position.x = next_vp.x();
         marker.pose.position.y = next_vp.y();
-        marker.pose.position.z = next_vp.z();
+        marker.pose.position.z = 1.0;
         marker.pose.orientation.x = Goal_heading.x();
         marker.pose.orientation.y = Goal_heading.y();
         marker.pose.orientation.z = Goal_heading.z();
