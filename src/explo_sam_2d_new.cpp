@@ -118,8 +118,8 @@ vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig, double i
 
     for (double radius = R; radius <= R + 0.5; radius += 0.49)
         for(double yaw = initial_yaw-PI/2; yaw < initial_yaw+PI/2; yaw += PI / (2*n) ) {
-            x = sensor_orig.x() + R * cos(yaw);
-            y = sensor_orig.y() + R * sin(yaw);
+            x = sensor_orig.x() + radius * cos(yaw);
+            y = sensor_orig.y() + radius * sin(yaw);
 
             // for every candidate goal, check surroundings
             bool candidate_valid = true;
