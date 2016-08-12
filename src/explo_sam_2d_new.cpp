@@ -69,12 +69,9 @@ struct SensorModel {
                 InitialVector = point3d(1.0, 0.0, 0.0);
                 InitialVector.rotate_IP(0.0, j * angle_inc_vel, i * angle_inc_hor);
                 SensorRays.push_back(InitialVector);
-                // pitch_yaws.push_back(make_pair(j * angle_inc_vel, i * angle_inc_hor));
-                // pitch_yaws.push_back(make_pair(j * angle_inc_vel, i * angle_inc_hor));
         }
     }
 }; 
-
 // SensorModel Velodyne_puck(3600, 16, 2*PI, PI/6, 100.0 );
 SensorModel Velodyne_puck(360, 16, 2*PI, 0.5236, 20.0);
 
@@ -111,7 +108,7 @@ octomap::Pointcloud cast_sensor_rays(const octomap::OcTree *octree, const point3
 }
 
 vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig, double initial_yaw) {
-    double R = 1.0;   // Robot step, in meters.
+    double R = 0.5;   // Robot step, in meters.
     double n = 3;
     octomap::OcTreeNode *n_cur;
 
@@ -119,7 +116,7 @@ vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig, double i
     double z = sensor_orig.z();                // fixed 
     double x, y;
 
-    // for(z = sensor_orig.z() - 1; z <= sensor_orig.z() + 1; z += 1)
+    for (double radius = R; radius <= R + 0.5; radius += 0.49)
         for(double yaw = initial_yaw-PI/2; yaw < initial_yaw+PI/2; yaw += PI / (2*n) ) {
             x = sensor_orig.x() + R * cos(yaw);
             y = sensor_orig.y() + R * sin(yaw);
@@ -149,6 +146,7 @@ vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig, double i
                 ROS_WARN("Part of Candidtae(%f, %f, %f) occupied", x, y, z);
             
         }
+        
     return candidates;
 }
 
@@ -161,21 +159,6 @@ double calc_MI(const octomap::OcTree *octree, const point3d &sensor_orig, const 
     return after - before;
 }
 
-void RPY2Quaternion(double roll, double pitch, double yaw, double *x, double *y, double *z, double *w) {
-    double cr2, cp2, cy2, sr2, sp2, sy2;
-    cr2 = cos(roll*0.5);
-    cp2 = cos(pitch*0.5);
-    cy2 = cos(yaw*0.5);
-
-    sr2 = -sin(roll*0.5);
-    sp2 = -sin(pitch*0.5);
-    sy2 = sin(yaw*0.5);
-
-    *w = cr2*cp2*cy2 + sr2*sp2*sy2;
-    *x = sr2*cp2*cy2 - cr2*sp2*sy2;
-    *y = cr2*sp2*cy2 + sr2*cp2*sy2;
-    *z = cr2*cp2*sy2 - sr2*sp2*cy2;
-}
 
 
 void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
@@ -544,6 +527,7 @@ int main(int argc, char **argv) {
             CandidatesMarker_array.markers[i].color.b = 0.0;
         }
         Candidates_pub.publish(CandidatesMarker_array);
+        CandidatesMarker_array.markers.clear();
         candidates.clear();
 
         // Publish the goal as a Marker in rviz
@@ -636,6 +620,7 @@ int main(int argc, char **argv) {
             }
             ROS_INFO("Publishing %ld occupied cells", j);
             Octomap_marker_pub.publish(OctomapOccupied_cubelist);
+            OctomapOccupied_cubelist.points.clear();
 
             // Send out results to file.
             explo_log_file.open(logfilename, std::ofstream::out | std::ofstream::app);
