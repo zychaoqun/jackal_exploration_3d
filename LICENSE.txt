@@ -3,7 +3,7 @@ Learning enabled Autonomous Exploration
 
 License for the library: New BSD License. 
 
-Copyright (c) 2016, Shi Bai, Xiangyu Liu, University of Freiburg
+Copyright (c) 2016, Shi Bai, Xiangyu Liu, RFAL, Stevens Institute of Technology.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
