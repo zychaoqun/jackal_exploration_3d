@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package>
-  <name>explo_octo_3d</name>
+  <name>jackal_exploration_3d</name>
   <version>0.0.0</version>
   <description>The explo_octo_3d package</description>
 
@@ -19,7 +19,7 @@
   <!-- Url tags are optional, but mutiple are allowed, one per tag -->
   <!-- Optional attribute type can be: website, bugtracker, or repository -->
   <!-- Example: -->
-  <!-- <url type="website">http://wiki.ros.org/explo_octo_3d</url> -->
+  <!-- <url type="website">http://wiki.ros.org/jackal_exploration_3d</url> -->
 
 
   <!-- Author tags are optional, mutiple are allowed, one per tag -->

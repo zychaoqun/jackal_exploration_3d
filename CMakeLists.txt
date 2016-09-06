@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(explo_octo_3d)
+project(jackal_exploration_3d)
 
 set(octomap_DIR "/opt/ros/indigo/share/octomap")
 set(CMAKE_CXX_FLAGS "-std=c++0x ${CMAKE_CXX_FLAGS} -O3")
