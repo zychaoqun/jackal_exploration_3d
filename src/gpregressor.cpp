@@ -4,7 +4,7 @@
 
 #include "gpregressor.h"
 #include "covMaterniso3.h"
-#include <iostream>
+// #include <iostream>
 
 
 using namespace Eigen;

@@ -5,14 +5,14 @@
 #include <iterator>
 #include <ctime>
 
+#include <ros/ros.h>
 #include <pcl/point_types.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <pcl_conversions/pcl_conversions.h>
-#include <tf/transform_listener.h>
 #include "pcl_ros/transforms.h"
 
+#include <tf/transform_listener.h>
 #include <octomap/octomap.h>
-#include <ros/ros.h>
 #include <pcl_ros/point_cloud.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
@@ -21,26 +21,21 @@
 #include <octomap_msgs/conversions.h>
 #include <octomap_msgs/GetOctomap.h>
 #include "navigation_utils.h"
-#include <ros/callback_queue.h>
 
 
 using namespace std;
-// using namespace std::chrono;
 
 typedef octomap::point3d point3d;
 typedef pcl::PointXYZ PointType;
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
 const double PI = 3.1415926;
-const double free_prob = 0.3;
+// const double free_prob = 0.3;
 const double octo_reso = 0.1;
 
 octomap::OcTree* cur_tree;
 octomap::OcTree* cur_tree_2d;
 
-bool octomap_flag = 0; // 0 : msg not received
-bool kinect_flag = 0; // 0 : msg not received
 tf::TransformListener *tf_listener; 
-int octomap_seq = 0;
    
 point3d position, laser_orig, velo_orig;
 
@@ -72,8 +67,7 @@ struct SensorModel {
         }
     }
 }; 
-// SensorModel Velodyne_puck(3600, 16, 2*PI, PI/6, 100.0 );
-SensorModel Velodyne_puck(360, 16, 2*PI, 0.5236, 20.0);
+SensorModel Velodyne_puck(360, 16, 2*PI, 0.5236, 30.0);
 
 
 double get_free_volume(const octomap::OcTree *octree) {
@@ -227,7 +221,7 @@ void hokuyo_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg )
 }
 
 int main(int argc, char **argv) {
-    ros::init(argc, argv, "explo_octomap_da_2d");
+    ros::init(argc, argv, "jackal_exploration_da");
     ros::NodeHandle nh;
     // ros::Subscriber octomap_sub;
     // octomap_sub = nh.subscribe<octomap_msgs::Octomap>("/octomap_binary", 10, octomap_callback);
@@ -238,12 +232,12 @@ int main(int argc, char **argv) {
     char buffer[80];
     time (&rawtime);
     timeinfo = localtime(&rawtime);
-    strftime(buffer,80,"Trajectory_%m%d_%R_%S_DA.txt",timeinfo);
+    strftime(buffer,80,"Trajectory_%R:%S_%m%d_DA.txt",timeinfo);
     std::string logfilename(buffer);
     std::cout << logfilename << endl;
-    strftime(buffer,80,"octomap_2d_%m%d_%R_%S_DA.ot",timeinfo);
+    strftime(buffer,80,"octomap_2d_%R:%S_%m%d_DA.ot",timeinfo);
     octomap_name_2d = buffer;
-    strftime(buffer,80,"octomap_3d_%m%d_%R_%S_DA.ot",timeinfo);
+    strftime(buffer,80,"octomap_3d_%R:%S_%m%d_DA.ot",timeinfo);
     octomap_name_3d = buffer;
 
 
