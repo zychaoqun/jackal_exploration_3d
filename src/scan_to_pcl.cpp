@@ -1,9 +1,3 @@
-#include <iostream>
-#include <fstream>
-#include <chrono>
-#include <algorithm>
-#include <iterator>
-
 #include <ros/ros.h>
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>

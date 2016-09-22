@@ -17,9 +17,6 @@
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <geometry_msgs/Pose.h>
-#include <octomap_msgs/Octomap.h>
-#include <octomap_msgs/conversions.h>
-#include <octomap_msgs/GetOctomap.h>
 #include "navigation_utils.h"
 
 
@@ -36,7 +33,7 @@ octomap::OcTree* cur_tree;
 octomap::OcTree* cur_tree_2d;
 
 tf::TransformListener *tf_listener; 
-   
+
 point3d position, laser_orig, velo_orig;
 
 ofstream explo_log_file;
@@ -223,8 +220,6 @@ void hokuyo_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg )
 int main(int argc, char **argv) {
     ros::init(argc, argv, "jackal_exploration_da");
     ros::NodeHandle nh;
-    // ros::Subscriber octomap_sub;
-    // octomap_sub = nh.subscribe<octomap_msgs::Octomap>("/octomap_binary", 10, octomap_callback);
 
     // Initialize time
     time_t rawtime;

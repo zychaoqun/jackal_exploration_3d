@@ -127,8 +127,8 @@ add_library(navigation_utils            src/navigation_utils.cpp)
 # add_library(covMatern                 src/covMaterniso3.cpp)
 
 ## Declare a cpp executable
-add_executable(jackal_exploration_da    src/explo_sam_2d_new.cpp )
-add_executable(jackal_exploration_gp    src/explo_gp_2d_new.cpp src/gpregressor.cpp  src/covMaterniso3.cpp)
+add_executable(jackal_exploration_da    src/jackal_exploration_da.cpp )
+add_executable(jackal_exploration_gp    src/jackal_exploration_gp.cpp src/gpregressor.cpp  src/covMaterniso3.cpp)
 add_executable(scan_to_pcl              src/scan_to_pcl.cpp)
 # add_executable(isam_ros               src/isam_example.cpp)
 
