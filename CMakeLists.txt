@@ -98,7 +98,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
+ INCLUDE_DIRS include
 #  LIBRARIES explo_octo_3d
 #  CATKIN_DEPENDS geometry_msgs octomap_msgs octomap_ros octomap_server pcl_ros roscpp std_msgs actionlib move_base_msgs
 #  DEPENDS system_lib
