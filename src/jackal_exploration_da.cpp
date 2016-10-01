@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
     }   
     
     // Rotate Sensor Model based on Velodyn Pose
-    Velodyne_puck.SensorRays.rotate(R_velo, P_velo, Y_velo);
+    velodynePuck.SensorRays.rotate(R_velo, P_velo, Y_velo);
     
     // Update the initial location of the robot
     got_tf = false;
@@ -254,7 +254,7 @@ int main(int argc, char **argv) {
         
         ROS_INFO("%lu candidates generated.", candidates.size());
         vector<double> MIs(candidates.size());
-        double before = get_free_volume(cur_tree);
+        double before = getFreeVolume(cur_tree);
         max_idx = 0;
 
         // for every candidate...
@@ -269,7 +269,7 @@ int main(int argc, char **argv) {
             // Evaluate Mutual Information
             Secs_tmp = ros::Time::now().toSec();
             Sensor_PrincipalAxis.rotate_IP(c.second.roll(), c.second.pitch(), c.second.yaw() );
-            octomap::Pointcloud hits = cast_sensor_rays(cur_tree, c.first, Sensor_PrincipalAxis);
+            octomap::Pointcloud hits = castSensorRays(cur_tree, c.first, Sensor_PrincipalAxis);
             Secs_CastRay += ros::Time::now().toSec() - Secs_tmp;
             Secs_tmp = ros::Time::now().toSec();
             MIs[i] = calc_MI(cur_tree, c.first, hits, before);
@@ -379,7 +379,7 @@ int main(int argc, char **argv) {
 
             // Update Octomap
             ros::spinOnce();
-            ROS_INFO("Succeed, new Map Free Volume: %f", get_free_volume(cur_tree));
+            ROS_INFO("Succeed, new Map Free Volume: %f", getFreeVolume(cur_tree));
             robot_step_counter++;
 
             // Prepare the header for occupied array
@@ -414,7 +414,7 @@ int main(int argc, char **argv) {
 
             // Send out results to file.
             explo_log_file.open(logfilename, std::ofstream::out | std::ofstream::app);
-            explo_log_file << "DA Step: " << robot_step_counter << "  | Current Entropy: " << get_free_volume(cur_tree) << endl;
+            explo_log_file << "DA Step: " << robot_step_counter << "  | Current Entropy: " << getFreeVolume(cur_tree) << endl;
             explo_log_file.close();
 
         }
