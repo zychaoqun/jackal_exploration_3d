@@ -44,6 +44,8 @@ int main(int argc, char **argv) {
     ros::Publisher JackalMarker_pub = nh.advertise<visualization_msgs::Marker>( "Jackal_Marker", 1 );
     ros::Publisher Candidates_pub = nh.advertise<visualization_msgs::MarkerArray>("Candidate_MIs", 1);
     ros::Publisher Octomap_marker_pub = nh.advertise<visualization_msgs::Marker>("Occupied_MarkerArray", 1);
+    ros::Publisher Frontier_points_pub = nh.advertise<visualization_msgs::Marker>("Frontier_points", 1);
+    ros::Publisher pub_twist = nh.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
 
 
     tf_listener = new tf::TransformListener();
@@ -52,6 +54,9 @@ int main(int argc, char **argv) {
 
     visualization_msgs::MarkerArray CandidatesMarker_array;
     visualization_msgs::Marker OctomapOccupied_cubelist;
+    visualization_msgs::Marker Frontier_points_cubelist;
+
+    geometry_msgs::Twist twist_cmd;
     
     ros::Time now_marker = ros::Time::now();
    
@@ -69,6 +74,8 @@ int main(int argc, char **argv) {
     cur_tree_2d = &new_tree_2d;
 
     bool got_tf = false;
+    bool arrived;
+    point3d next_vp;
 
     // Update the pose of velodyne from predefined tf.
     got_tf = false;
@@ -90,147 +97,110 @@ int main(int argc, char **argv) {
     // Rotate Sensor Model based on Velodyn Pose
     velodynePuck.SensorRays.rotate(R_velo, P_velo, Y_velo);
     
-    // Update the initial location of the robot
-    got_tf = false;
-    while(!got_tf){
-    try{
-        tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
-        velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
-        got_tf = true;
-    }
-    catch (tf::TransformException ex) {
-        ROS_WARN("Wait for tf: velodyne to map"); 
-    } 
-    ros::Duration(0.05).sleep();
+    // Initialize the map
+    for(int o =0; o < 6; o++){
+        // Update the pose of the robot
+        got_tf = false;
+        while(!got_tf){
+        try{
+            tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);// need to change tf of kinect###############
+            velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+            got_tf = true;
+        }
+        catch (tf::TransformException ex) {
+            ROS_WARN("Wait for tf: velodyne frame"); 
+        } 
+        ros::Duration(0.05).sleep();
+        }
+
+        got_tf = false;
+        while(!got_tf){
+        try{
+            tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
+            laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+            got_tf = true;
+        }
+        catch (tf::TransformException ex) {
+            ROS_WARN("Wait for tf: LaserScan frame"); 
+        } 
+        ros::Duration(0.05).sleep();
+        }
+
+        // Take a Scan
+        ros::spinOnce();
+
+        // Rotate another 60 degrees
+        twist_cmd.linear.x = twist_cmd.linear.y = twist_cmd.angular.z = 0;
+        ros::Time start_turn = ros::Time::now();
+
+        ROS_WARN("Rotate 60 degrees");
+        while (ros::Time::now() - start_turn < ros::Duration(2.6)){ // turning duration - second
+        twist_cmd.angular.z = 0.6; // turning speed
+        // turning angle = turning speed * turning duration / 3.14 * 180
+        pub_twist.publish(twist_cmd);
+        ros::Duration(0.05).sleep();
+        }
+        // stop
+        twist_cmd.angular.z = 0;
+        pub_twist.publish(twist_cmd);
     }
 
-    got_tf = false;
-    while(!got_tf){
-    try{
-        tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
-        laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
-        got_tf = true;
-    }
-    catch (tf::TransformException ex) {
-        ROS_WARN("Wait for tf: laser to map"); 
-    } 
-    ros::Duration(0.05).sleep();
-    }
-    ROS_INFO("Initial  Position : %3.2f, %3.2f, %3.2f - Yaw : %3.1f ", laser_orig.x(), laser_orig.y(), laser_orig.z(), transform.getRotation().getAngle()*PI/180);
-    // Take a Initial Scan
-    ros::spinOnce();
-
-    // Rotate ~60 degrees 
-    point3d next_vp(laser_orig.x(), laser_orig.y(),laser_orig.z());
-    Goal_heading.setRPY(0.0, 0.0, transform.getRotation().getAngle()+0.5233);
-    Goal_heading.normalize();
-    bool arrived = goToDest(laser_orig, Goal_heading);
-
-    // Update the pose of the robot
-    got_tf = false;
-    while(!got_tf){
-    try{
-        tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
-        velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
-        got_tf = true;
-    }
-    catch (tf::TransformException ex) {
-        ROS_WARN("Wait for tf: velodyne to map"); 
-    } 
-    ros::Duration(0.05).sleep();
-    }
-
-    got_tf = false;
-    while(!got_tf){
-    try{
-        tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
-        laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
-        got_tf = true;
-    }
-    catch (tf::TransformException ex) {
-        ROS_WARN("Wait for tf: laser to map"); 
-    } 
-    ros::Duration(0.05).sleep();
-    }
-
-    // Take a Second Scan
-    ros::spinOnce();
-
-    // Rotate another 60 degrees
-    Goal_heading.setRPY(0.0, 0.0, transform.getRotation().getAngle()+0.5233);
-    arrived = goToDest(laser_orig, Goal_heading);
-
-    // Update the pose of the robot
-    got_tf = false;
-    while(!got_tf){
-    try{
-        tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
-        velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
-        got_tf = true;
-    }
-    catch (tf::TransformException ex) {
-        ROS_WARN("Wait for tf: velodyne to map"); 
-    } 
-    ros::Duration(0.05).sleep();
-    }
-
-    got_tf = false;
-    while(!got_tf){
-    try{
-        tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
-        laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
-        got_tf = true;
-    }
-    catch (tf::TransformException ex) {
-        ROS_WARN("Wait for tf: laser to map"); 
-    } 
-    ros::Duration(0.05).sleep();
-    }
-
-    // Take a Third Scan
-    ros::spinOnce();
-
-    // Rotate another 60 degrees
-    Goal_heading.setRPY(0.0, 0.0, transform.getRotation().getAngle()+0.5233);
-    arrived = goToDest(laser_orig, Goal_heading);
-
-    // Update the pose of the robot
-    got_tf = false;
-    while(!got_tf){
-    try{
-        tf_listener->lookupTransform("/map", "/velodyne", ros::Time(0), transform);
-        velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
-        got_tf = true;
-    }
-    catch (tf::TransformException ex) {
-        ROS_WARN("Wait for tf: velodyne to map"); 
-    } 
-    ros::Duration(0.05).sleep();
-    }
-
-    got_tf = false;
-    while(!got_tf){
-    try{
-        tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
-        laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
-        got_tf = true;
-    }
-    catch (tf::TransformException ex) {
-        ROS_WARN("Wait for tf: laser to map"); 
-    } 
-    ros::Duration(0.05).sleep();
-    }
-    // Take a Third Scan
-    ros::spinOnce();
 
     // steps robot taken, counter
     int robot_step_counter = 0;
 
     while (ros::ok())
     {
+        vector<vector<point3d>> frontier_groups=extractFrontierPoints( cur_tree );
+        //visualize frontier points;
+        unsigned long int o = 0;
+        for(vector<vector<point3d>>::size_type e = 0; e < frontier_groups.size(); e++) {
+            o = o+frontier_groups[e].size();
+        }
+
+        Frontier_points_cubelist.points.resize(o);
+        ROS_INFO("frontier points %ld", o);
+        now_marker = ros::Time::now();
+        Frontier_points_cubelist.header.frame_id = "map";
+        Frontier_points_cubelist.header.stamp = now_marker;
+        Frontier_points_cubelist.ns = "frontier_points_array";
+        Frontier_points_cubelist.id = 0;
+        Frontier_points_cubelist.type = visualization_msgs::Marker::CUBE_LIST;
+        Frontier_points_cubelist.action = visualization_msgs::Marker::ADD;
+        Frontier_points_cubelist.scale.x = octo_reso;
+        Frontier_points_cubelist.scale.y = octo_reso;
+        Frontier_points_cubelist.scale.z = octo_reso;
+        Frontier_points_cubelist.color.a = 1.0;
+        Frontier_points_cubelist.color.r = (double)255/255;
+        Frontier_points_cubelist.color.g = 0;
+        Frontier_points_cubelist.color.b = (double)0/255;
+        Frontier_points_cubelist.lifetime = ros::Duration();
+
+        unsigned long int t = 0;
+        int l = 0;
+        geometry_msgs::Point q;
+        for(vector<vector<point3d>>::size_type n = 0; n < frontier_groups.size(); n++) { 
+            for(vector<point3d>::size_type m = 0; m < frontier_groups[n].size(); m++){
+               q.x = frontier_groups[n][m].x();
+               q.y = frontier_groups[n][m].y();
+               q.z = frontier_groups[n][m].z()+octo_reso;
+               Frontier_points_cubelist.points.push_back(q); 
+               
+            }
+            t++;
+        }
+        ROS_INFO("Publishing %ld frontier_groups", t);
+        
+        Frontier_points_pub.publish(Frontier_points_cubelist); //publish frontier_points
+        Frontier_points_cubelist.points.clear();    
+
         // Generate Candidates
-        vector<pair<point3d, point3d>> candidates = generate_candidates(laser_orig, transform.getRotation().getAngle());
-        while(candidates.size() <= 1)
+        vector<pair<point3d, point3d>> candidates = extractCandidateViewPoints(frontier_groups, laser_orig); 
+        // Generate Testing poses
+        ROS_INFO("%lu candidates generated.", candidates.size());
+        frontier_groups.clear();
+
+        while(candidates.size() < 1)
         {
             // Get the current heading
             got_tf = false;
@@ -241,21 +211,32 @@ int main(int argc, char **argv) {
                 got_tf = true;
             }
             catch (tf::TransformException ex) {
-                ROS_WARN("Wait for tf: laser to map"); 
+                ROS_WARN("Wait for tf: LaserScan frame");  
             } 
             ros::Duration(0.05).sleep();
             }
-            // Rotate negative along Yaw for 30 deg to look for more open areas
-            Goal_heading.setRPY(0.0, 0.0, transform.getRotation().getAngle() - PI/6);
-            Goal_heading.normalize();
-            arrived = goToDest(laser_orig, Goal_heading);
-            vector<pair<point3d, point3d>> candidates = generate_candidates(laser_orig, transform.getRotation().getAngle());
+            // Rotate another 60 degrees
+            twist_cmd.linear.x = twist_cmd.linear.y = twist_cmd.angular.z = 0;
+            ros::Time start_turn = ros::Time::now();
+
+            ROS_WARN("Rotate 60 degrees");
+            while (ros::Time::now() - start_turn < ros::Duration(2.6)){ // turning duration - second
+            twist_cmd.angular.z = 0.4; // turning speed
+            pub_twist.publish(twist_cmd);
+            ros::Duration(0.05).sleep();
+            }
+            // stop
+            twist_cmd.angular.z = 0;
+            pub_twist.publish(twist_cmd);
+            vector<pair<point3d, point3d>> candidates = extractCandidateViewPoints(frontier_groups, laser_orig);
         }
         
-        ROS_INFO("%lu candidates generated.", candidates.size());
         vector<double> MIs(candidates.size());
-        double before = getFreeVolume(cur_tree);
+        double before = countFreeVolume(cur_tree);
         max_idx = 0;
+
+        // unsigned int p = 0;
+
 
         // for every candidate...
         double Secs_CastRay, Secs_InsertRay, Secs_tmp;
@@ -379,7 +360,7 @@ int main(int argc, char **argv) {
 
             // Update Octomap
             ros::spinOnce();
-            ROS_INFO("Succeed, new Map Free Volume: %f", getFreeVolume(cur_tree));
+            ROS_INFO("Succeed, new Map Free Volume: %f", countFreeVolume(cur_tree));
             robot_step_counter++;
 
             // Prepare the header for occupied array
@@ -414,7 +395,7 @@ int main(int argc, char **argv) {
 
             // Send out results to file.
             explo_log_file.open(logfilename, std::ofstream::out | std::ofstream::app);
-            explo_log_file << "DA Step: " << robot_step_counter << "  | Current Entropy: " << getFreeVolume(cur_tree) << endl;
+            explo_log_file << "DA Step: " << robot_step_counter << "  | Current Entropy: " << countFreeVolume(cur_tree) << endl;
             explo_log_file.close();
 
         }
