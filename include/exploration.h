@@ -215,12 +215,18 @@ public:
     InfoTheoreticExploration();
     InfoTheoreticExploration(double octo_reso);
     
-    double calculateMutualInformation(void);
+    void calculateMutualInformation(void);
+    void generateCandidateViewPoints(void);
+
+
 
 private:
     double getFreeVolume(void);
     octomap::OcTree* cur_tree;
     double octo_reso;
+    vector<pair<point3d, point3d>> candidate_view_points;
+    octomap::Pointcloud hits;
+    
 };
 
 #endif
