@@ -151,8 +151,11 @@ int main(int argc, char **argv) {
 
     while (ros::ok())
     {
+        // Extract Frontier points
         vector<vector<point3d>> frontier_groups=extractFrontierPoints( cur_tree );
-        //visualize frontier points;
+        
+
+        // Visualize frontier points;
         unsigned long int o = 0;
         for(vector<vector<point3d>>::size_type e = 0; e < frontier_groups.size(); e++) {
             o = o+frontier_groups[e].size();
@@ -191,54 +194,19 @@ int main(int argc, char **argv) {
         }
         ROS_INFO("Publishing %ld frontier_groups", t);
         
-        Frontier_points_pub.publish(Frontier_points_cubelist); //publish frontier_points
+        // publish frontier points for rviz 
+        Frontier_points_pub.publish(Frontier_points_cubelist); 
         Frontier_points_cubelist.points.clear();    
 
-        // Generate Candidates
-        vector<pair<point3d, point3d>> candidates = extractCandidateViewPoints(frontier_groups, laser_orig); 
-        // Generate Testing poses
+        // Generate Candidates based on cue from frontiers
+        vector<pair<point3d, point3d>> candidates = extractCandidateViewPoints(frontier_groups, laser_orig);         
         ROS_INFO("%lu candidates generated.", candidates.size());
         frontier_groups.clear();
-
-        while(candidates.size() < 1)
-        {
-            // Get the current heading
-            got_tf = false;
-            while(!got_tf){
-            try{
-                tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
-                laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
-                got_tf = true;
-            }
-            catch (tf::TransformException ex) {
-                ROS_WARN("Wait for tf: LaserScan frame");  
-            } 
-            ros::Duration(0.05).sleep();
-            }
-            // Rotate another 60 degrees
-            twist_cmd.linear.x = twist_cmd.linear.y = twist_cmd.angular.z = 0;
-            ros::Time start_turn = ros::Time::now();
-
-            ROS_WARN("Rotate 60 degrees");
-            while (ros::Time::now() - start_turn < ros::Duration(2.6)){ // turning duration - second
-            twist_cmd.angular.z = 0.4; // turning speed
-            pub_twist.publish(twist_cmd);
-            ros::Duration(0.05).sleep();
-            }
-            // stop
-            twist_cmd.angular.z = 0;
-            pub_twist.publish(twist_cmd);
-            vector<pair<point3d, point3d>> candidates = extractCandidateViewPoints(frontier_groups, laser_orig);
-        }
         
+        // Evaluate MI for every candidate view points
         vector<double> MIs(candidates.size());
         double before = countFreeVolume(cur_tree);
         max_idx = 0;
-
-        // unsigned int p = 0;
-
-
-        // for every candidate...
         double Secs_CastRay, Secs_InsertRay, Secs_tmp;
         Secs_InsertRay = 0;
         Secs_CastRay = 0;
@@ -255,18 +223,13 @@ int main(int argc, char **argv) {
             Secs_tmp = ros::Time::now().toSec();
             MIs[i] = calc_MI(cur_tree, c.first, hits, before);
             Secs_InsertRay += ros::Time::now().toSec() - Secs_tmp;
-            // Pick the Best Candidate
+            
+            // Pick the Candidate view point with max MI
             if (MIs[i] > MIs[max_idx])
             {
                 max_idx = i;
             }
         }
-
-        next_vp = point3d(candidates[max_idx].first.x(),candidates[max_idx].first.y(),candidates[max_idx].first.z());
-        Goal_heading.setRPY(0.0, 0.0, candidates[max_idx].second.yaw());
-        Goal_heading.normalize();
-        ROS_INFO("Max MI : %f , @ location: %3.2f  %3.2f  %3.2f", MIs[max_idx], next_vp.x(), next_vp.y(), next_vp.z() );
-        ROS_INFO("CastRay Time: %2.3f Secs. InsertRay Time: %2.3f Secs.", Secs_CastRay, Secs_InsertRay);
 
         // Publish the candidates as marker array in rviz
         tf::Quaternion MI_heading;
@@ -300,6 +263,14 @@ int main(int argc, char **argv) {
         Candidates_pub.publish(CandidatesMarker_array);
         CandidatesMarker_array.markers.clear();
         candidates.clear();
+
+        // Setup the Goal
+        next_vp = point3d(candidates[max_idx].first.x(),candidates[max_idx].first.y(),candidates[max_idx].first.z());
+        Goal_heading.setRPY(0.0, 0.0, candidates[max_idx].second.yaw());
+        Goal_heading.normalize();
+        ROS_INFO("Max MI : %f , @ location: %3.2f  %3.2f  %3.2f", MIs[max_idx], next_vp.x(), next_vp.y(), next_vp.z() );
+        ROS_INFO("CastRay Time: %2.3f Secs. InsertRay Time: %2.3f Secs.", Secs_CastRay, Secs_InsertRay);
+
 
         // Publish the goal as a Marker in rviz
         visualization_msgs::Marker marker;
