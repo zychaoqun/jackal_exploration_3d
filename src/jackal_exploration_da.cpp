@@ -207,22 +207,17 @@ int main(int argc, char **argv) {
         vector<double> MIs(candidates.size());
         double before = countFreeVolume(cur_tree);
         max_idx = 0;
-        double Secs_CastRay, Secs_InsertRay, Secs_tmp;
-        Secs_InsertRay = 0;
-        Secs_CastRay = 0;
+        double begin_mi_eva_secs, end_mi_eva_secs;
+        begin_mi_eva_secs = ros::Time::now().toSec();
 
         #pragma omp parallel for
         for(int i = 0; i < candidates.size(); i++) 
         {
             auto c = candidates[i];
             // Evaluate Mutual Information
-            Secs_tmp = ros::Time::now().toSec();
             Sensor_PrincipalAxis.rotate_IP(c.second.roll(), c.second.pitch(), c.second.yaw() );
             octomap::Pointcloud hits = castSensorRays(cur_tree, c.first, Sensor_PrincipalAxis);
-            Secs_CastRay += ros::Time::now().toSec() - Secs_tmp;
-            Secs_tmp = ros::Time::now().toSec();
             MIs[i] = calc_MI(cur_tree, c.first, hits, before);
-            Secs_InsertRay += ros::Time::now().toSec() - Secs_tmp;
             
             // Pick the Candidate view point with max MI
             if (MIs[i] > MIs[max_idx])
@@ -230,6 +225,8 @@ int main(int argc, char **argv) {
                 max_idx = i;
             }
         }
+        end_mi_eva_secs = ros::Time::now().toSec();
+        ROS_INFO("Mutual Infomation Eva took:  %3.3f Secs.", end_mi_eva_secs - begin_mi_eva_secs);
 
         // Publish the candidates as marker array in rviz
         tf::Quaternion MI_heading;
@@ -252,9 +249,9 @@ int main(int argc, char **argv) {
             CandidatesMarker_array.markers[i].pose.orientation.y = MI_heading.y();
             CandidatesMarker_array.markers[i].pose.orientation.z = MI_heading.z();
             CandidatesMarker_array.markers[i].pose.orientation.w = MI_heading.w();
-            CandidatesMarker_array.markers[i].scale.x = (double)MIs[i]/MIs[max_idx];
-            CandidatesMarker_array.markers[i].scale.y = 0.05;
-            CandidatesMarker_array.markers[i].scale.z = 0.05;
+            CandidatesMarker_array.markers[i].scale.x = (double)2.0*MIs[i]/MIs[max_idx];
+            CandidatesMarker_array.markers[i].scale.y = 0.2;
+            CandidatesMarker_array.markers[i].scale.z = 0.2;
             CandidatesMarker_array.markers[i].color.a = (double)MIs[i]/MIs[max_idx];
             CandidatesMarker_array.markers[i].color.r = 0.0;
             CandidatesMarker_array.markers[i].color.g = 1.0;
@@ -269,7 +266,7 @@ int main(int argc, char **argv) {
         Goal_heading.setRPY(0.0, 0.0, candidates[max_idx].second.yaw());
         Goal_heading.normalize();
         ROS_INFO("Max MI : %f , @ location: %3.2f  %3.2f  %3.2f", MIs[max_idx], next_vp.x(), next_vp.y(), next_vp.z() );
-        ROS_INFO("CastRay Time: %2.3f Secs. InsertRay Time: %2.3f Secs.", Secs_CastRay, Secs_InsertRay);
+        
 
 
         // Publish the goal as a Marker in rviz
@@ -297,7 +294,7 @@ int main(int argc, char **argv) {
         GoalMarker_pub.publish( marker );
 
         // Send the Robot 
-        Goal_heading.setRPY(0.0, 0.0, candidates[max_idx].second.yaw());
+        // Goal_heading.setRPY(0.0, 0.0, candidates[max_idx].second.yaw());
         arrived = goToDest(next_vp, Goal_heading);
 
         if(arrived)
@@ -366,7 +363,7 @@ int main(int argc, char **argv) {
 
             // Send out results to file.
             explo_log_file.open(logfilename, std::ofstream::out | std::ofstream::app);
-            explo_log_file << "DA Step: " << robot_step_counter << "  | Current Entropy: " << countFreeVolume(cur_tree) << endl;
+            explo_log_file << "DA Step ," << robot_step_counter << ", Current Entropy ," << countFreeVolume(cur_tree) << ", time, " << ros::Time::now().toSec() << endl;
             explo_log_file.close();
 
         }
