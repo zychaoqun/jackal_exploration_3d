@@ -9,7 +9,7 @@
 #include <iostream>
 #include <fstream>
 // #include <chrono>
-#include <algorithm>
+// #include <algorithm>
 // #include <iterator>
 // #include <ctime>
 
@@ -85,8 +85,8 @@ int main(int argc, char **argv) {
         tf_listener->lookupTransform("/base_link", "/velodyne", ros::Time(0), transform);
         velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
         tf::Matrix3x3(transform.getRotation()).getRPY(R_velo, P_velo, Y_velo);
-        velodynePuck.SensorRays.rotate(R_velo, P_velo, Y_velo);
-        ROS_INFO("Current Velodyne heading: vector(%2.2f, %2.2f, %2.2f) -  RPY(%3.1f, %3.1f, %3.1f).", Sensor_PrincipalAxis.x(), Sensor_PrincipalAxis.y(), Sensor_PrincipalAxis.z(), R_velo/PI*180.0, P_velo/PI*180.0, Y_velo/PI*180.0);
+        ROS_INFO("Current Velodyne heading: vector(%2.2f, %2.2f, %2.2f) -  RPY(%3.1f, %3.1f, %3.1f).", 
+            velo_orig.x(), velo_orig.y(), velo_orig.z(), R_velo/PI*180.0, P_velo/PI*180.0, Y_velo/PI*180.0);
         got_tf = true;
         }
     catch (tf::TransformException ex) {
@@ -149,7 +149,6 @@ int main(int argc, char **argv) {
 
     // steps robot taken, counter
     int robot_step_counter = 0;
-    int idx_ptr = 0;
     int num_of_samples = 12;
 
     while (ros::ok())
@@ -236,11 +235,13 @@ int main(int argc, char **argv) {
             // }
         }
 
+
         // Bayesian Optimization for actively selecting candidate
+        double train_time, test_time;
+        GPRegressor g(100, 3, 0.01);
         for (int bay_itr = 0; bay_itr < 3; bay_itr++) {
             //Initialize gp regression
-            double train_time, test_time;
-            GPRegressor g(100, 3, 0.01);
+            
             MatrixXf gp_train_x(candidates.size(), 2), gp_train_label(candidates.size(), 1), gp_test_x(gp_test_poses.size(), 2);
 
             for (int i=0; i< candidates.size(); i++){
@@ -264,7 +265,6 @@ int main(int argc, char **argv) {
             g.test(gp_test_x, gp_mean_MI, gp_var_MI);
             test_time = ros::Time::now().toSec() - test_time;
             ROS_INFO("GP: Train(%zd) took %f secs , Test(%zd) took %f secs", candidates.size(), train_time, gp_test_poses.size(), test_time);        
-
 
             // Get Acquisition function
             double beta = 2.4;
@@ -332,6 +332,8 @@ int main(int argc, char **argv) {
         // loop in the idx_MI, if the candidate with max MI cannot be achieved, 
         // switch to a sub-optimal MI.
         arrived = false;
+        int idx_ptr = 0;
+
         while (!arrived) {
             // Setup the Goal
             next_vp = point3d(candidates[idx_MI[idx_ptr]].first.x(),candidates[idx_MI[idx_ptr]].first.y(),candidates[idx_MI[idx_ptr]].first.z());

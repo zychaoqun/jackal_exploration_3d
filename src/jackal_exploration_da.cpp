@@ -6,7 +6,6 @@
 #include <iostream>
 #include <fstream>
 // #include <chrono>
-#include <algorithm>
 // #include <iterator>
 // #include <ctime>
 
@@ -82,8 +81,8 @@ int main(int argc, char **argv) {
         tf_listener->lookupTransform("/base_link", "/velodyne", ros::Time(0), transform);
         velo_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
         tf::Matrix3x3(transform.getRotation()).getRPY(R_velo, P_velo, Y_velo);
-        velodynePuck.SensorRays.rotate(R_velo, P_velo, Y_velo);
-        ROS_INFO("Current Velodyne heading: vector(%2.2f, %2.2f, %2.2f) -  RPY(%3.1f, %3.1f, %3.1f).", Sensor_PrincipalAxis.x(), Sensor_PrincipalAxis.y(), Sensor_PrincipalAxis.z(), R_velo/PI*180.0, P_velo/PI*180.0, Y_velo/PI*180.0);
+        ROS_INFO("Current Velodyne heading: vector(%2.2f, %2.2f, %2.2f) -  RPY(%3.1f, %3.1f, %3.1f).", 
+            velo_orig.x(), velo_orig.y(), velo_orig.z(), R_velo/PI*180.0, P_velo/PI*180.0, Y_velo/PI*180.0);
         got_tf = true;
         }
     catch (tf::TransformException ex) {
@@ -154,7 +153,6 @@ int main(int argc, char **argv) {
         // Extract Frontier points
         vector<vector<point3d>> frontier_groups=extractFrontierPoints( cur_tree );
         
-
         // Visualize frontier points;
         unsigned long int o = 0;
         for(vector<vector<point3d>>::size_type e = 0; e < frontier_groups.size(); e++) {
@@ -275,6 +273,7 @@ int main(int argc, char **argv) {
         // loop in the idx_MI, if the candidate with max MI cannot be achieved, 
         // switch to a sub-optimal MI.
         arrived = false;
+        int idx_ptr = 0;
         while (!arrived) {
             // Setup the Goal
             next_vp = point3d(candidates[idx_MI[idx_ptr]].first.x(),candidates[idx_MI[idx_ptr]].first.y(),candidates[idx_MI[idx_ptr]].first.z());

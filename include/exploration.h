@@ -10,6 +10,7 @@
 #include <tf/transform_listener.h>
 #include <octomap/octomap.h>
 #include <geometry_msgs/Pose.h>
+#include <algorithm>
 
 
 using namespace std;
