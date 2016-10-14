@@ -2,10 +2,10 @@
 
 This is a autonomous exploration implementation using the method in:
 
-S. Bai, J. Wang, K. Doherty, and B. Englot, "Inference-Enabled Information-Theoretic Exploration of Continuous Action Spaces,"Proceedings of the 17th International Symposium on Robotics Research, 16 pp., September 2015. 
+S. Bai, J. Wang, F. Chen, and B. Englot, "Information-Theoretic Exploration with Bayesian Optimization," IEEE/RSJ International Conference on Intelligent Robots and Systems(IROS), October 2016.
 
 
-* Version  0.2
+* Version  0.5
 
 ### How do I get set up? ###
 
@@ -19,11 +19,15 @@ my_catkin_workspace$ catkin_make
 
 * Running:
 
+From Jackal:
 ```
-$ roscore
-$ rosrun explo_3d_node explo*
+$ roslaunch jackal_planner gmapping_jackal.launch
+$ rosrun jackal_exploration_3d jackal_exploration_da 
+```
+From Remote Laptop:
+```
+$ rosrun rviz rviz
 ```
 
-### Who do I talk to? ###
-
-bona: baishi.bona@gmail.com
+### Contributor ###
+Shi Bai(Bona), Tixiao Shan, Xiangyu Xu(Shawn)
