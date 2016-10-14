@@ -1,6 +1,9 @@
 // Related headers:
 #include "exploration.h"
 #include "navigation_utils.h"
+#include "gpregressor.h"
+#include "covMaterniso3.h"
+
 
 //C library headers:
 #include <iostream>
@@ -29,12 +32,12 @@ int main(int argc, char **argv) {
     char buffer[80];
     time (&rawtime);
     timeinfo = localtime(&rawtime);
-    strftime(buffer,80,"Trajectory_%R:%S_%m%d_DA.txt",timeinfo);
+    strftime(buffer,80,"Trajectory_%R:%S_%m%d_BayOpt.txt",timeinfo);
     std::string logfilename(buffer);
     std::cout << logfilename << endl;
-    strftime(buffer,80,"octomap_2d_%R:%S_%m%d_DA.ot",timeinfo);
+    strftime(buffer,80,"octomap_2d_%R:%S_%m%d_BayOpt.ot",timeinfo);
     octomap_name_2d = buffer;
-    strftime(buffer,80,"octomap_3d_%R:%S_%m%d_DA.ot",timeinfo);
+    strftime(buffer,80,"octomap_3d_%R:%S_%m%d_BayOpt.ot",timeinfo);
     octomap_name_3d = buffer;
 
 
@@ -154,7 +157,6 @@ int main(int argc, char **argv) {
         // Extract Frontier points
         vector<vector<point3d>> frontier_groups=extractFrontierPoints( cur_tree );
         
-
         // Visualize frontier points;
         unsigned long int o = 0;
         for(vector<vector<point3d>>::size_type e = 0; e < frontier_groups.size(); e++) {
@@ -200,7 +202,8 @@ int main(int argc, char **argv) {
 
         // Generate Candidates based on cue from frontiers
         vector<pair<point3d, point3d>> candidates = extractCandidateViewPoints(frontier_groups, laser_orig, num_of_samples);         
-        ROS_INFO("%lu candidates generated.", candidates.size());
+        vector<pair<point3d, point3d>> gp_test_poses = extractCandidateViewPoints(frontier_groups, laser_orig, num_of_samples*2);         
+        ROS_INFO("%lu candidates, %lu gp test poses, GENERATED.", candidates.size(), gp_test_poses.size());
         frontier_groups.clear();
         
         // Evaluate MI for every candidate view points
@@ -220,11 +223,11 @@ int main(int argc, char **argv) {
             octomap::Pointcloud hits = castSensorRays(cur_tree, c.first, Sensor_PrincipalAxis);
             
             // Considering pure MI for decision making
-            // MIs[i] = calc_MI(cur_tree, c.first, hits, before);
+            MIs[i] = calc_MI(cur_tree, c.first, hits, before);
             
             // Normalize the MI with distance
-            MIs[i] = calc_MI(cur_tree, c.first, hits, before) / 
-                sqrt(pow(c.first.x()-laser_orig.x(),2) + pow(c.first.y()-laser_orig.y(),2));
+            // MIs[i] = calc_MI(cur_tree, c.first, hits, before) / 
+            //     sqrt(pow(c.first.x()-laser_orig.x(),2) + pow(c.first.y()-laser_orig.y(),2));
 
             // Pick the Candidate view point with max MI
             // if (MIs[i] > MIs[max_idx])
@@ -233,11 +236,65 @@ int main(int argc, char **argv) {
             // }
         }
 
-        // sort vector MIs, with idx_MI, descending
-        vector<int> idx_MI = sort_MIs(MIs);
+        // Bayesian Optimization for actively selecting candidate
+        for (int bay_itr = 0; bay_itr < 3; bay_itr++) {
+            //Initialize gp regression
+            double train_time, test_time;
+            GPRegressor g(100, 3, 0.01);
+            MatrixXf gp_train_x(candidates.size(), 2), gp_train_label(candidates.size(), 1), gp_test_x(gp_test_poses.size(), 2);
 
+            for (int i=0; i< candidates.size(); i++){
+                gp_train_x(i,0) = candidates[i].first.x();
+                gp_train_x(i,1) = candidates[i].first.y();
+                gp_train_label(i) = MIs[i];
+            }
+
+            for (int i=0; i< gp_test_poses.size(); i++){
+                gp_test_x(i,0) = gp_test_poses[i].first.x();
+                gp_test_x(i,1) = gp_test_poses[i].first.y();
+            }
+
+            // Perform GP regression
+            MatrixXf gp_mean_MI, gp_var_MI;
+            train_time = ros::Time::now().toSec();
+            g.train(gp_train_x, gp_train_label);
+            train_time = ros::Time::now().toSec() - train_time;
+
+            test_time = ros::Time::now().toSec();
+            g.test(gp_test_x, gp_mean_MI, gp_var_MI);
+            test_time = ros::Time::now().toSec() - test_time;
+            ROS_INFO("GP: Train(%zd) took %f secs , Test(%zd) took %f secs", candidates.size(), train_time, gp_test_poses.size(), test_time);        
+
+
+            // Get Acquisition function
+            double beta = 2.4;
+            vector<double>  bay_acq_fun(gp_test_poses.size());
+            for (int i = 0; i < gp_test_poses.size(); i++) {
+                bay_acq_fun[i] = gp_mean_MI(i) + beta*gp_var_MI(i);
+            }
+            vector<int> idx_acq = sort_MIs(bay_acq_fun);
+
+            // evaluate MI, add to the candidate
+            auto c = gp_test_poses[idx_acq[0]];
+            Sensor_PrincipalAxis = point3d(1.0, 0.0, 0.0);
+            Sensor_PrincipalAxis.rotate_IP(c.second.roll(), c.second.pitch(), c.second.yaw() );
+            octomap::Pointcloud hits = castSensorRays(cur_tree, c.first, Sensor_PrincipalAxis);
+            candidates.push_back(c);
+            MIs.push_back(calc_MI(cur_tree, c.first, hits, before));
+        }
+        
         end_mi_eva_secs = ros::Time::now().toSec();
         ROS_INFO("Mutual Infomation Eva took:  %3.3f Secs.", end_mi_eva_secs - begin_mi_eva_secs);
+
+        // Normalize the MI with distance
+        for(int i = 0; i < candidates.size(); i++) {
+            auto c = candidates[i];
+            MIs[i] = MIs[i] / 
+                sqrt(pow(c.first.x()-laser_orig.x(),2) + pow(c.first.y()-laser_orig.y(),2));
+        }
+
+        // sort vector MIs, with idx_MI, descending
+        vector<int> idx_MI = sort_MIs(MIs);
 
         // Publish the candidates as marker array in rviz
         tf::Quaternion MI_heading;
@@ -375,7 +432,7 @@ int main(int argc, char **argv) {
 
                 // Send out results to file.
                 explo_log_file.open(logfilename, std::ofstream::out | std::ofstream::app);
-                explo_log_file << "DA Step ," << robot_step_counter << ", Current Entropy ," << countFreeVolume(cur_tree) << ", time, " << ros::Time::now().toSec() << endl;
+                explo_log_file << "BayOpt Step ," << robot_step_counter << ", Current Entropy ," << countFreeVolume(cur_tree) << ", time, " << ros::Time::now().toSec() << endl;
                 explo_log_file.close();
 
             }

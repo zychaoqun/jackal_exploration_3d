@@ -128,7 +128,7 @@ add_library(navigation_utils            src/navigation_utils.cpp)
 
 ## Declare a cpp executable
 add_executable(jackal_exploration_da    src/jackal_exploration_da.cpp )
-add_executable(jackal_exploration_gp    src/jackal_exploration_gp.cpp src/gpregressor.cpp  src/covMaterniso3.cpp)
+add_executable(jackal_exploration_by    src/jackal_exploration_by.cpp src/gpregressor.cpp  src/covMaterniso3.cpp)
 add_executable(scan_to_pcl              src/scan_to_pcl.cpp)
 # add_executable(isam_ros               src/isam_example.cpp)
 
@@ -146,7 +146,7 @@ target_link_libraries(jackal_exploration_da
   navigation_utils
 )
 
-target_link_libraries(jackal_exploration_gp
+target_link_libraries(jackal_exploration_by
   ${catkin_LIBRARIES}
   ${OCTOMAP_LIBRARIES}
   navigation_utils

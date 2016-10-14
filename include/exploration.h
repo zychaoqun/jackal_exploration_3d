@@ -18,7 +18,7 @@ typedef octomap::point3d point3d;
 typedef pcl::PointXYZ PointType;
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
 const double PI = 3.1415926;
-const double octo_reso = 0.1;
+const double octo_reso = 0.3;
 
 octomap::OcTree* cur_tree;
 octomap::OcTree* cur_tree_2d;
@@ -29,6 +29,16 @@ point3d position, laser_orig, velo_orig;
 
 ofstream explo_log_file;
 std::string octomap_name_2d, octomap_name_3d;
+
+vector<int> sort_MIs(const vector<double> &v){
+    vector<int> idx(v.size());
+    iota(idx.begin(), idx.end(),0);
+
+    sort(idx.begin(), idx.end(), 
+        [&v](int i1, int i2) {return v[i1] > v[i2];});
+
+    return idx;
+}
 
 
 struct sensorModel {
@@ -55,7 +65,7 @@ struct sensorModel {
         }
     }
 }; 
-sensorModel velodynePuck(360, 16, 2*PI, 0.5236, 30.0);
+sensorModel velodynePuck(360, 2, 2*PI, 0.005236, 30.0);
 
 
 double countFreeVolume(const octomap::OcTree *octree) {
@@ -113,8 +123,8 @@ vector<vector<point3d>> extractFrontierPoints(const octomap::OcTree *octree) {
          y_cur = n.getY();
          z_cur = n.getZ();
 
-         if(z_cur < 0.2)    continue;
-         if(z_cur > 0.4)    continue;
+         if(z_cur < 0.4)    continue;
+         if(z_cur > 0.4 + octo_reso)    continue;
          //if there are unknown around the cube, the cube is frontier
          for (double x_cur_buf = x_cur - octo_reso; x_cur_buf < x_cur + octo_reso; x_cur_buf += octo_reso)
              for (double y_cur_buf = y_cur - octo_reso; y_cur_buf < y_cur + octo_reso; y_cur_buf += octo_reso)
@@ -166,10 +176,10 @@ vector<vector<point3d>> extractFrontierPoints(const octomap::OcTree *octree) {
 
 //generate candidates for moving. Input sensor_orig and initial_yaw, Output candidates
 //senor_orig: locationg of sensor.   initial_yaw: yaw direction of sensor
-vector<pair<point3d, point3d>> extractCandidateViewPoints(vector<vector<point3d>> frontier_groups, point3d sensor_orig ) {
+vector<pair<point3d, point3d>> extractCandidateViewPoints(vector<vector<point3d>> frontier_groups, point3d sensor_orig, int n ) {
     double R2 = 1.0;        // Robot step, in meters.
     double R3 = 0.4;       // to other frontiers
-    double n = 12;
+    // int n = 12;
     octomap::OcTreeNode *n_cur_3d;
     vector<pair<point3d, point3d>> candidates;
     double z = sensor_orig.z();
