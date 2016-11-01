@@ -130,6 +130,7 @@ add_library(navigation_utils            src/navigation_utils.cpp)
 add_executable(jackal_exploration_da    src/jackal_exploration_da.cpp )
 add_executable(jackal_exploration_by    src/jackal_exploration_by.cpp src/gpregressor.cpp  src/covMaterniso3.cpp)
 add_executable(scan_to_pcl              src/scan_to_pcl.cpp)
+add_executable(save_to_ply              src/save_ply.cpp)
 # add_executable(isam_ros               src/isam_example.cpp)
 
 
@@ -154,6 +155,10 @@ target_link_libraries(jackal_exploration_by
 
 
 target_link_libraries(scan_to_pcl
+  ${catkin_LIBRARIES}
+)
+
+target_link_libraries(save_to_ply
   ${catkin_LIBRARIES}
 )
 
