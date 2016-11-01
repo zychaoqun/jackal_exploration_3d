@@ -5,6 +5,9 @@ bool goToDest(point3d go_posi, tf::Quaternion q) {
   // make an action client that spins up a thread
   MoveBaseClient ac("move_base", true);
 
+  // cancel previous goals
+  ac.cancelAllGoals();
+
   //wait for the action server to come up
   while(!ac.waitForServer(ros::Duration(5.0))){
     ROS_INFO("Waiting for the move_base action server to come up");
@@ -24,10 +27,10 @@ bool goToDest(point3d go_posi, tf::Quaternion q) {
   goal.target_pose.pose.orientation.z = q.z();
   goal.target_pose.pose.orientation.w = q.w();
 
-  ROS_INFO("Sending goal to (%3.2f, %3.2f, %3.2f)", go_posi.x(), go_posi.y(), go_posi.z());
+  ROS_INFO("Sending goal to (%3.2f, %3.2f, %3.2f), and wait for 30 seconds...", go_posi.x(), go_posi.y(), go_posi.z());
   ac.sendGoal(goal);
 
-  ac.waitForResult();
+  ac.waitForResult(ros::Duration(30.0));
 
   // Returns true iff we reached the goal
   if(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED)
