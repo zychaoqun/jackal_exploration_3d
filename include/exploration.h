@@ -331,37 +331,36 @@ void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
     delete cloud_local;
 }
 
-void hokuyo_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg )
-{
-    pcl::PCLPointCloud2 cloud2;
-    pcl_conversions::toPCL(*cloud2_msg, cloud2);
-    PointCloud* cloud (new PointCloud);
-    PointCloud* cloud_local (new PointCloud);
-    pcl::fromPCLPointCloud2(cloud2,*cloud_local);
-    octomap::Pointcloud hits;
+// void hokuyo_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg )
+// {
+//     pcl::PCLPointCloud2 cloud2;
+//     pcl_conversions::toPCL(*cloud2_msg, cloud2);
+//     PointCloud* cloud (new PointCloud);
+//     PointCloud* cloud_local (new PointCloud);
+//     pcl::fromPCLPointCloud2(cloud2,*cloud_local);
+//     octomap::Pointcloud hits;
 
-    ros::Duration(0.07).sleep();
-    while(!pcl_ros::transformPointCloud("/map", *cloud_local, *cloud, *tf_listener))
-    {
-        ros::Duration(0.01).sleep();
-    }
+//     ros::Duration(0.07).sleep();
+//     while(!pcl_ros::transformPointCloud("/map", *cloud_local, *cloud, *tf_listener))
+//     {
+//         ros::Duration(0.01).sleep();
+//     }
 
-    // Insert points into octomap one by one...
-    for (int j = 1; j< cloud->width; j++)
-    {
-        // if(isnan(cloud->at(j).x)) continue;
-        hits.push_back(point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z));
-        // cur_tree_2d->insertRay(point3d( laser_orig.x(),laser_orig.y(),laser_orig.z()), 
-        //     point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), 30.0);
-    }
-    cur_tree_2d->insertPointCloud(hits, laser_orig, velodynePuck.max_range);
-    // cur_tree_2d->updateInnerOccupancy();
-    ROS_INFO("Entropy(2d map) : %f", countFreeVolume(cur_tree_2d));
-    cur_tree_2d->write(octomap_name_2d);
-    delete cloud;
-    delete cloud_local;
-
-}
+//     // Insert points into octomap one by one...
+//     for (int j = 1; j< cloud->width; j++)
+//     {
+//         // if(isnan(cloud->at(j).x)) continue;
+//         hits.push_back(point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z));
+//         // cur_tree_2d->insertRay(point3d( laser_orig.x(),laser_orig.y(),laser_orig.z()), 
+//         //     point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), 30.0);
+//     }
+//     cur_tree_2d->insertPointCloud(hits, laser_orig, velodynePuck.max_range);
+//     // cur_tree_2d->updateInnerOccupancy();
+//     ROS_INFO("Entropy(2d map) : %f", countFreeVolume(cur_tree_2d));
+//     cur_tree_2d->write(octomap_name_2d);
+//     delete cloud;
+//     delete cloud_local;
+// }
 
 
 class InfoTheoreticExploration {

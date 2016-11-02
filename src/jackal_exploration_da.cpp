@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
 
 
     ros::Subscriber velodyne_sub = nh.subscribe<sensor_msgs::PointCloud2>("/velodyne_points", 1, velodyne_callbacks);
-    ros::Subscriber hokuyo_sub = nh.subscribe<sensor_msgs::PointCloud2>("/hokuyo_points", 1, hokuyo_callbacks);
+    // ros::Subscriber hokuyo_sub = nh.subscribe<sensor_msgs::PointCloud2>("/hokuyo_points", 1, hokuyo_callbacks);
     ros::Publisher GoalMarker_pub = nh.advertise<visualization_msgs::Marker>( "Goal_Marker", 1 );
     ros::Publisher JackalMarker_pub = nh.advertise<visualization_msgs::Marker>( "Jackal_Marker", 1 );
     ros::Publisher Candidates_pub = nh.advertise<visualization_msgs::MarkerArray>("Candidate_MIs", 1);
@@ -372,6 +372,8 @@ int main(int argc, char **argv) {
                 ROS_INFO("Publishing %ld occupied cells in RVIZ", j);
                 Octomap_marker_pub.publish(OctomapOccupied_cubelist);
                 OctomapOccupied_cubelist.points.clear();
+
+                // prepare octomap msg
                 octomap_msgs::binaryMapToMsg(*cur_tree, msg_octomap);
                 msg_octomap.binary = 1;
                 msg_octomap.id = 1;
