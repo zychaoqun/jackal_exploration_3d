@@ -30,7 +30,8 @@ bool goToDest(point3d go_posi, tf::Quaternion q) {
   ROS_INFO("Sending goal to (%3.2f, %3.2f, %3.2f), and wait for 30 seconds...", go_posi.x(), go_posi.y(), go_posi.z());
   ac.sendGoal(goal);
 
-  ac.waitForResult(ros::Duration(30.0));
+  while(ros::ok())
+    ac.waitForResult(ros::Duration(0.5));
 
   // Returns true iff we reached the goal
   if(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED)
