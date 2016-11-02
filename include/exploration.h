@@ -9,6 +9,9 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <tf/transform_listener.h>
 #include <octomap/octomap.h>
+#include <octomap_msgs/Octomap.h>
+#include <octomap_msgs/conversions.h>
+
 #include <geometry_msgs/Pose.h>
 #include <algorithm>
 
@@ -23,6 +26,7 @@ const double octo_reso = 0.3;
 
 octomap::OcTree* cur_tree;
 octomap::OcTree* cur_tree_2d;
+octomap_msgs::Octomap msg_octomap;
 
 tf::TransformListener *tf_listener; 
 

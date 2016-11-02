@@ -45,6 +45,7 @@ int main(int argc, char **argv) {
     ros::Publisher Octomap_marker_pub = nh.advertise<visualization_msgs::Marker>("Occupied_MarkerArray", 1);
     ros::Publisher Frontier_points_pub = nh.advertise<visualization_msgs::Marker>("Frontier_points", 1);
     ros::Publisher pub_twist = nh.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
+    ros::Publisher Octomap_pub = nh.advertise<octomap_msgs::Octomap>("octomap_3d",1);
 
 
     tf_listener = new tf::TransformListener();
@@ -371,6 +372,13 @@ int main(int argc, char **argv) {
                 ROS_INFO("Publishing %ld occupied cells in RVIZ", j);
                 Octomap_marker_pub.publish(OctomapOccupied_cubelist);
                 OctomapOccupied_cubelist.points.clear();
+                octomap_msgs::binaryMapToMsg(*cur_tree, msg_octomap);
+                msg_octomap.binary = 1;
+                msg_octomap.id = 1;
+                msg_octomap.resolution = octo_reso;
+                msg_octomap.header.frame_id = "/map";
+                msg_octomap.header.stamp = ros::Time::now();
+                Octomap_pub.publish(msg_octomap);
 
                 // Send out results to file.
                 explo_log_file.open(logfilename, std::ofstream::out | std::ofstream::app);
