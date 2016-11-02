@@ -201,8 +201,8 @@ int main(int argc, char **argv) {
         Frontier_points_cubelist.points.clear();    
 
         // Generate Candidates based on cue from frontiers
-        vector<pair<point3d, point3d>> candidates = extractCandidateViewPoints(frontier_groups, laser_orig, num_of_samples);         
-        vector<pair<point3d, point3d>> gp_test_poses = extractCandidateViewPoints(frontier_groups, laser_orig, num_of_samples*2);         
+        vector<pair<point3d, point3d>> candidates = extractCandidateViewPoints(frontier_groups, velo_orig, num_of_samples);         
+        vector<pair<point3d, point3d>> gp_test_poses = extractCandidateViewPoints(frontier_groups, velo_orig, num_of_samples*2);         
         ROS_INFO("%lu candidates, %lu gp test poses, GENERATED.", candidates.size(), gp_test_poses.size());
         frontier_groups.clear();
         
@@ -227,7 +227,7 @@ int main(int argc, char **argv) {
             
             // Normalize the MI with distance
             // MIs[i] = calc_MI(cur_tree, c.first, hits, before) / 
-            //     sqrt(pow(c.first.x()-laser_orig.x(),2) + pow(c.first.y()-laser_orig.y(),2));
+            //     sqrt(pow(c.first.x()-velo_orig.x(),2) + pow(c.first.y()-velo_orig.y(),2));
 
             // Pick the Candidate view point with max MI
             // if (MIs[i] > MIs[max_idx])
@@ -291,7 +291,7 @@ int main(int argc, char **argv) {
         for(int i = 0; i < candidates.size(); i++) {
             auto c = candidates[i];
             MIs[i] = MIs[i] / 
-                sqrt(pow(c.first.x()-laser_orig.x(),2) + pow(c.first.y()-laser_orig.y(),2));
+                sqrt(pow(c.first.x()-velo_orig.x(),2) + pow(c.first.y()-velo_orig.y(),2));
         }
 
         // sort vector MIs, with idx_MI, descending

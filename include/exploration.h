@@ -183,7 +183,7 @@ vector<vector<point3d>> extractFrontierPoints(const octomap::OcTree *octree) {
 //senor_orig: locationg of sensor.   initial_yaw: yaw direction of sensor
 vector<pair<point3d, point3d>> extractCandidateViewPoints(vector<vector<point3d>> frontier_groups, point3d sensor_orig, int n ) {
     double R2 = 1.0;        // Robot step, in meters.
-    double R3 = 0.4;       // to other frontiers
+    double R3 = 0.4;        // to other frontiers
     // int n = 12;
     octomap::OcTreeNode *n_cur_3d;
     vector<pair<point3d, point3d>> candidates;

@@ -152,7 +152,7 @@ int main(int argc, char **argv) {
     while (ros::ok())
     {
         // Extract Frontier points
-        vector<vector<point3d>> frontier_groups=extractFrontierPoints( cur_tree );
+        vector<vector<point3d>> frontier_groups = extractFrontierPoints(cur_tree);
         
         // Visualize frontier points;
         unsigned long int o = 0;
@@ -172,7 +172,7 @@ int main(int argc, char **argv) {
         Frontier_points_cubelist.scale.x = octo_reso;
         Frontier_points_cubelist.scale.y = octo_reso;
         Frontier_points_cubelist.scale.z = octo_reso;
-        Frontier_points_cubelist.color.a = 1.0;
+        Frontier_points_cubelist.color.a = 0.8;
         Frontier_points_cubelist.color.r = (double)255/255;
         Frontier_points_cubelist.color.g = 0;
         Frontier_points_cubelist.color.b = (double)0/255;
@@ -198,7 +198,7 @@ int main(int argc, char **argv) {
         Frontier_points_cubelist.points.clear();    
 
         // Generate Candidates based on cue from frontiers
-        vector<pair<point3d, point3d>> candidates = extractCandidateViewPoints(frontier_groups, laser_orig, num_of_samples);         
+        vector<pair<point3d, point3d>> candidates = extractCandidateViewPoints(frontier_groups, velo_orig, num_of_samples);         
         ROS_INFO("%lu candidates generated.", candidates.size());
         frontier_groups.clear();
         
@@ -223,7 +223,7 @@ int main(int argc, char **argv) {
             
             // Normalize the MI with distance
             MIs[i] = calc_MI(cur_tree, c.first, hits, before) / 
-                sqrt(pow(c.first.x()-laser_orig.x(),2) + pow(c.first.y()-laser_orig.y(),2));
+                sqrt(pow(c.first.x()-velo_orig.x(),2) + pow(c.first.y()-velo_orig.y(),2));
 
             // Pick the Candidate view point with max MI
             // if (MIs[i] > MIs[max_idx])
