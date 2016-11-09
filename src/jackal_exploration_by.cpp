@@ -66,18 +66,10 @@ int main(int argc, char **argv) {
    
     double R_velo, P_velo, Y_velo;
 
-    // Initialize parameters 
-    position = point3d(0, 0, 0.0);
-    point3d Sensor_PrincipalAxis(1, 0, 0);
-    octomap::OcTreeNode *n;
-    octomap::OcTree new_tree(octo_reso);
-    octomap::OcTree new_tree_2d(octo_reso);
     cur_tree = &new_tree;
-    cur_tree_2d = &new_tree_2d;
-
-    bool got_tf = false;
-    bool arrived;
-    point3d next_vp;
+    cur_tree->setBBXMin(bbx_min);   // Min Bounding Box
+    cur_tree->setBBXMax(bbx_max);     // Max Bounding Box
+    cur_tree->useBBXLimit(true);
 
     // Update the pose of velodyne from predefined tf.
     got_tf = false;

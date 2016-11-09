@@ -25,15 +25,26 @@ const double PI = 3.1415926;
 const double octo_reso = 0.3;
 
 octomap::OcTree* cur_tree;
-octomap::OcTree* cur_tree_2d;
 octomap_msgs::Octomap msg_octomap;
-
 tf::TransformListener *tf_listener; 
 
 point3d position, laser_orig, velo_orig;
 
 ofstream explo_log_file;
 std::string octomap_name_2d, octomap_name_3d;
+
+// Initialize parameters 
+point3d Sensor_PrincipalAxis(1, 0, 0);
+octomap::OcTreeNode *n;
+octomap::OcTree new_tree(octo_reso);
+point3d bbx_min(-20.0, -20.0, -1.0);
+point3d bbx_max(20.0, 20.0, 30.0);
+
+
+bool got_tf = false;
+bool arrived;
+point3d next_vp;
+
 
 vector<int> sort_MIs(const vector<double> &v){
     vector<int> idx(v.size());

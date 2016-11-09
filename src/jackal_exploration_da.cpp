@@ -62,18 +62,10 @@ int main(int argc, char **argv) {
    
     double R_velo, P_velo, Y_velo;
 
-    // Initialize parameters 
-    position = point3d(0, 0, 0.0);
-    point3d Sensor_PrincipalAxis(1, 0, 0);
-    octomap::OcTreeNode *n;
-    octomap::OcTree new_tree(octo_reso);
-    octomap::OcTree new_tree_2d(octo_reso);
     cur_tree = &new_tree;
-    cur_tree_2d = &new_tree_2d;
-
-    bool got_tf = false;
-    bool arrived;
-    point3d next_vp;
+    cur_tree->setBBXMin(bbx_min);   // Min Bounding Box
+    cur_tree->setBBXMax(bbx_max);     // Max Bounding Box
+    cur_tree->useBBXLimit(true);
 
     // Update the pose of velodyne from predefined tf.
     got_tf = false;
@@ -96,7 +88,7 @@ int main(int argc, char **argv) {
     velodynePuck.SensorRays.rotate(R_velo, P_velo, Y_velo);
     
     // Initialize the map
-    for(int o =0; o < 1; o++){
+    for(int i=0; i<6; i++){
         // Update the pose of the robot
         got_tf = false;
         while(!got_tf){
@@ -111,18 +103,18 @@ int main(int argc, char **argv) {
         ros::Duration(0.05).sleep();
         }
 
-        got_tf = false;
-        while(!got_tf){
-        try{
-            tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
-            laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
-            got_tf = true;
-        }
-        catch (tf::TransformException ex) {
-            ROS_WARN("Wait for tf: LaserScan frame"); 
-        } 
-        ros::Duration(0.05).sleep();
-        }
+        // got_tf = false;
+        // while(!got_tf){
+        // try{
+        //     tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
+        //     laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+        //     got_tf = true;
+        // }
+        // catch (tf::TransformException ex) {
+        //     ROS_WARN("Wait for tf: LaserScan frame"); 
+        // } 
+        // ros::Duration(0.05).sleep();
+        // }
 
         // Take a Scan
         ros::spinOnce();
@@ -132,8 +124,8 @@ int main(int argc, char **argv) {
         ros::Time start_turn = ros::Time::now();
 
         ROS_WARN("Rotate 60 degrees");
-        while (ros::Time::now() - start_turn < ros::Duration(2.6)){ // turning duration - second
-        twist_cmd.angular.z = 0.6; // turning speed
+        while (ros::Time::now() - start_turn < ros::Duration(2.0)){ // turning duration - second
+        twist_cmd.angular.z = 0.5; // turning speed ~30deg/sec
         // turning angle = turning speed * turning duration / 3.14 * 180
         pub_twist.publish(twist_cmd);
         ros::Duration(0.05).sleep();
