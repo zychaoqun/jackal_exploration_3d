@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
     velodynePuck.SensorRays.rotate(R_velo, P_velo, Y_velo);
     
     // Initialize the map
-    for(int o =0; o < 1; o++){
+    for(int i=0; i<6; i++){
         // Update the pose of the robot
         got_tf = false;
         while(!got_tf){
