@@ -193,8 +193,9 @@ vector<vector<point3d>> extractFrontierPoints(const octomap::OcTree *octree) {
 //generate candidates for moving. Input sensor_orig and initial_yaw, Output candidates
 //senor_orig: locationg of sensor.   initial_yaw: yaw direction of sensor
 vector<pair<point3d, point3d>> extractCandidateViewPoints(vector<vector<point3d>> frontier_groups, point3d sensor_orig, int n ) {
-    double R2 = 1.0;        // Robot step, in meters.
-    double R3 = 0.4;        // to other frontiers
+    double R2_min = 1.0;        // distance from candidate view point to frontier centers, in meters.
+    double R2_max = 10.0;
+    double R3 = 0.4;            // to other frontiers
     // int n = 12;
     octomap::OcTreeNode *n_cur_3d;
     vector<pair<point3d, point3d>> candidates;
@@ -203,8 +204,9 @@ vector<pair<point3d, point3d>> extractCandidateViewPoints(vector<vector<point3d>
     double yaw;
     double distance_can;
 
-        for(vector<vector<point3d>>::size_type u = 0; u < frontier_groups.size(); u++) {
-            for(double yaw = 0; yaw < 2*PI; yaw += PI*2 / n){ 
+        for(vector<vector<point3d>>::size_type u = 0; u < frontier_groups.size(); u++) 
+            for(double yaw = 0; yaw < 2*PI; yaw += PI*2 / n) 
+                for(double R2 = R2_min; R2<R2_max; R2+=1.0) {
                 x = frontier_groups[u][0].x() - R2 * cos(yaw);
                 y = frontier_groups[u][0].y() - R2 * sin(yaw);
 
@@ -253,52 +255,11 @@ vector<pair<point3d, point3d>> extractCandidateViewPoints(vector<vector<point3d>
                 {
                     candidates.push_back(make_pair<point3d, point3d>(point3d(x, y, z), point3d(0.0, 0.0, yaw)));
                 }
-            }
+            
         }
     return candidates;
 }
 
-// vector<pair<point3d, point3d>> generate_candidates(point3d sensor_orig, double initial_yaw) {
-//     double R = 0.5;   // Robot step, in meters.
-//     double n = 3;
-//     octomap::OcTreeNode *n_cur;
-
-//     vector<pair<point3d, point3d>> candidates;
-//     double z = sensor_orig.z();                // fixed 
-//     double x, y;
-
-//     for (double radius = R; radius <= R + 0.5; radius += 0.49)
-//         for(double yaw = initial_yaw-PI/2; yaw < initial_yaw+PI/2; yaw += PI / (2*n) ) {
-//             x = sensor_orig.x() + radius * cos(yaw);
-//             y = sensor_orig.y() + radius * sin(yaw);
-
-//             // for every candidate goal, check surroundings
-//             bool candidate_valid = true;
-//             for (double x_buf = x - 0.1; x_buf < x + 0.1; x_buf += octo_reso/2) 
-//                 for (double y_buf = y - 0.1; y_buf < y + 0.1; y_buf += octo_reso/2)
-//                     for (double z_buf = z - 0.1; z_buf < z + 0.1; z_buf += octo_reso/2)
-//             {
-//                 n_cur = cur_tree_2d->search(point3d(x_buf, y_buf, z_buf));
-//                 if(!n_cur) {
-//                     // ROS_WARN("Part of (%f, %f, %f) unknown", x_buf, y_buf, z_buf);
-//                     // candidate_valid = false;
-//                     continue;
-//                 }                                 
-//                 if(cur_tree_2d->isNodeOccupied(n_cur)) {
-//                     // ROS_WARN("Part of (%f, %f, %f) occupied", x_buf, y_buf, z_buf);
-//                     candidate_valid = false;
-//                 }  
-//             }
-//             if (candidate_valid)
-//             {
-//                 candidates.push_back(make_pair<point3d, point3d>(point3d(x, y, z), point3d(0.0, 0.0, yaw)));
-//             }
-//             else
-//                 ROS_WARN("Part of Candidtae(%f, %f, %f) occupied", x, y, z);
-//         }
-        
-//     return candidates;
-// }
 
 double calc_MI(const octomap::OcTree *octree, const point3d &sensor_orig, const octomap::Pointcloud &hits, const double before) {
     auto octree_copy = new octomap::OcTree(*octree);
@@ -341,37 +302,6 @@ void velodyne_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg ) {
     delete cloud;
     delete cloud_local;
 }
-
-// void hokuyo_callbacks( const sensor_msgs::PointCloud2ConstPtr& cloud2_msg )
-// {
-//     pcl::PCLPointCloud2 cloud2;
-//     pcl_conversions::toPCL(*cloud2_msg, cloud2);
-//     PointCloud* cloud (new PointCloud);
-//     PointCloud* cloud_local (new PointCloud);
-//     pcl::fromPCLPointCloud2(cloud2,*cloud_local);
-//     octomap::Pointcloud hits;
-
-//     ros::Duration(0.07).sleep();
-//     while(!pcl_ros::transformPointCloud("/map", *cloud_local, *cloud, *tf_listener))
-//     {
-//         ros::Duration(0.01).sleep();
-//     }
-
-//     // Insert points into octomap one by one...
-//     for (int j = 1; j< cloud->width; j++)
-//     {
-//         // if(isnan(cloud->at(j).x)) continue;
-//         hits.push_back(point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z));
-//         // cur_tree_2d->insertRay(point3d( laser_orig.x(),laser_orig.y(),laser_orig.z()), 
-//         //     point3d(cloud->at(j).x, cloud->at(j).y, cloud->at(j).z), 30.0);
-//     }
-//     cur_tree_2d->insertPointCloud(hits, laser_orig, velodynePuck.max_range);
-//     // cur_tree_2d->updateInnerOccupancy();
-//     ROS_INFO("Entropy(2d map) : %f", countFreeVolume(cur_tree_2d));
-//     cur_tree_2d->write(octomap_name_2d);
-//     delete cloud;
-//     delete cloud_local;
-// }
 
 
 class InfoTheoreticExploration {
