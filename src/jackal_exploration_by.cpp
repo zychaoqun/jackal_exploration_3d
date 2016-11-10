@@ -35,8 +35,8 @@ int main(int argc, char **argv) {
     strftime(buffer,80,"Trajectory_%R:%S_%m%d_BayOpt.txt",timeinfo);
     std::string logfilename(buffer);
     std::cout << logfilename << endl;
-    strftime(buffer,80,"octomap_2d_%R:%S_%m%d_BayOpt.ot",timeinfo);
-    octomap_name_2d = buffer;
+    // strftime(buffer,80,"octomap_2d_%R:%S_%m%d_BayOpt.ot",timeinfo);
+    // octomap_name_2d = buffer;
     strftime(buffer,80,"octomap_3d_%R:%S_%m%d_BayOpt.ot",timeinfo);
     octomap_name_3d = buffer;
 
@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
     ros::Publisher GoalMarker_pub = nh.advertise<visualization_msgs::Marker>( "Goal_Marker", 1 );
     ros::Publisher JackalMarker_pub = nh.advertise<visualization_msgs::Marker>( "Jackal_Marker", 1 );
     ros::Publisher Candidates_pub = nh.advertise<visualization_msgs::MarkerArray>("Candidate_MIs", 1);
-    ros::Publisher Octomap_marker_pub = nh.advertise<visualization_msgs::Marker>("Occupied_MarkerArray", 1);
+    // ros::Publisher Octomap_marker_pub = nh.advertise<visualization_msgs::Marker>("Occupied_MarkerArray", 1);
     ros::Publisher Frontier_points_pub = nh.advertise<visualization_msgs::Marker>("Frontier_points", 1);
     ros::Publisher pub_twist = nh.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
     ros::Publisher Octomap_pub = nh.advertise<octomap_msgs::Octomap>("octomap_3d",1);
@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
     tf::Quaternion Goal_heading;
 
     visualization_msgs::MarkerArray CandidatesMarker_array;
-    visualization_msgs::Marker OctomapOccupied_cubelist;
+    // visualization_msgs::Marker OctomapOccupied_cubelist;
     visualization_msgs::Marker Frontier_points_cubelist;
 
     geometry_msgs::Twist twist_cmd;
@@ -103,19 +103,6 @@ int main(int argc, char **argv) {
         }
         catch (tf::TransformException ex) {
             ROS_WARN("Wait for tf: velodyne frame"); 
-        } 
-        ros::Duration(0.05).sleep();
-        }
-
-        got_tf = false;
-        while(!got_tf){
-        try{
-            tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
-            laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
-            got_tf = true;
-        }
-        catch (tf::TransformException ex) {
-            ROS_WARN("Wait for tf: LaserScan frame"); 
         } 
         ros::Duration(0.05).sleep();
         }
@@ -377,53 +364,10 @@ int main(int argc, char **argv) {
                 ros::Duration(0.05).sleep();
                 }
 
-                got_tf = false;
-                while(!got_tf){
-                try{
-                    tf_listener->lookupTransform("/map", "/laser", ros::Time(0), transform);
-                    laser_orig = point3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
-                    got_tf = true;
-                }
-                catch (tf::TransformException ex) {
-                    ROS_WARN("Wait for tf: laser to map"); 
-                } 
-                ros::Duration(0.05).sleep();
-                }
-
                 // Update Octomap
                 ros::spinOnce();
                 ROS_INFO("Succeed, new Map Free Volume: %f", countFreeVolume(cur_tree));
                 robot_step_counter++;
-
-                // Prepare the header for occupied array
-                now_marker = ros::Time::now();
-                OctomapOccupied_cubelist.header.frame_id = "map";
-                OctomapOccupied_cubelist.header.stamp = now_marker;
-                OctomapOccupied_cubelist.ns = "octomap_occupied_array";
-                OctomapOccupied_cubelist.id = 0;
-                OctomapOccupied_cubelist.type = visualization_msgs::Marker::CUBE_LIST;
-                OctomapOccupied_cubelist.action = visualization_msgs::Marker::ADD;
-                OctomapOccupied_cubelist.scale.x = octo_reso;
-                OctomapOccupied_cubelist.scale.y = octo_reso;
-                OctomapOccupied_cubelist.scale.z = octo_reso;
-                OctomapOccupied_cubelist.color.a = 0.5;
-                OctomapOccupied_cubelist.color.r = (double)19/255;
-                OctomapOccupied_cubelist.color.g = (double)121/255;
-                OctomapOccupied_cubelist.color.b = (double)156/255;
-
-                unsigned long int j = 0;
-                geometry_msgs::Point p;
-                for(octomap::OcTree::leaf_iterator n = cur_tree->begin_leafs(cur_tree->getTreeDepth()); n != cur_tree->end_leafs(); ++n) {
-                    if(!cur_tree->isNodeOccupied(*n)) continue;
-                    p.x = n.getX();
-                    p.y = n.getY();
-                    p.z = n.getZ();
-                    OctomapOccupied_cubelist.points.push_back(p); 
-                    j++;
-                }
-                ROS_INFO("Publishing %ld occupied cells in RVIZ", j);
-                Octomap_marker_pub.publish(OctomapOccupied_cubelist);
-                OctomapOccupied_cubelist.points.clear();
 
                 // prepare octomap msg
                 octomap_msgs::binaryMapToMsg(*cur_tree, msg_octomap);
