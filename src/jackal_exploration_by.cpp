@@ -65,6 +65,7 @@ int main(int argc, char **argv) {
     ros::Time now_marker = ros::Time::now();
    
     double R_velo, P_velo, Y_velo;
+    const int num_of_bay = 3;
 
     cur_tree = &new_tree;
     cur_tree->setBBXMin(bbx_min);   // Min Bounding Box
@@ -185,7 +186,11 @@ int main(int argc, char **argv) {
         // vector<pair<point3d, point3d>> gp_test_poses = extractCandidateViewPoints(frontier_groups, velo_orig, num_of_samples*2);         
         // ROS_INFO("%lu candidates, %lu gp test poses, GENERATED.", candidates.size(), gp_test_poses.size());
         ROS_INFO("Candidate View Points: %luGenereated, %d evaluating...", candidates.size(), num_of_samples_eva);
-        candidates.resize(num_of_samples_eva);
+        int temp_size = candidates.size()-3;
+        if (temp_size <= 3)
+            ROS_ERROR("candidate size less than 3, can not perform Bayesian Optimization");
+        
+        candidates.resize(min(num_of_samples_eva,temp_size));
         frontier_groups.clear();
         
         // Evaluate MI for every candidate view points
@@ -222,7 +227,7 @@ int main(int argc, char **argv) {
         // Bayesian Optimization for actively selecting candidate
         double train_time, test_time;
         GPRegressor g(100, 3, 0.01);
-        for (int bay_itr = 0; bay_itr < 3; bay_itr++) {
+        for (int bay_itr = 0; bay_itr < num_of_bay; bay_itr++) {
             //Initialize gp regression
             
             MatrixXf gp_train_x(candidates.size(), 2), gp_train_label(candidates.size(), 1), gp_test_x(gp_test_poses.size(), 2);

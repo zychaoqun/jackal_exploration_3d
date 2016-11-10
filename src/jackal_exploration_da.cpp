@@ -179,7 +179,8 @@ int main(int argc, char **argv) {
         vector<pair<point3d, point3d>> candidates = extractCandidateViewPoints(frontier_groups, velo_orig, num_of_samples);         
         std::random_shuffle(candidates.begin(),candidates.end()); // shuffle to select a subset
         ROS_INFO("Candidate View Points: %luGenereated, %d evaluating...", candidates.size(), num_of_samples_eva);
-        candidates.resize(num_of_samples_eva);
+        int temp_size = candidates.size();
+        candidates.resize(min(num_of_samples_eva,temp_size));
         frontier_groups.clear();
         
         // Evaluate MI for every candidate view points
