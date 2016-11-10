@@ -23,6 +23,9 @@ typedef pcl::PointXYZ PointType;
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
 const double PI = 3.1415926;
 const double octo_reso = 0.3;
+const int num_of_samples = 12;
+const int num_of_samples_eva = 50;
+
 
 octomap::OcTree* cur_tree;
 octomap_msgs::Octomap msg_octomap;

@@ -129,7 +129,6 @@ int main(int argc, char **argv) {
 
     // steps robot taken, counter
     int robot_step_counter = 0;
-    int num_of_samples = 12;
 
     while (ros::ok())
     {
@@ -181,8 +180,12 @@ int main(int argc, char **argv) {
 
         // Generate Candidates based on cue from frontiers
         vector<pair<point3d, point3d>> candidates = extractCandidateViewPoints(frontier_groups, velo_orig, num_of_samples);         
-        vector<pair<point3d, point3d>> gp_test_poses = extractCandidateViewPoints(frontier_groups, velo_orig, num_of_samples*2);         
-        ROS_INFO("%lu candidates, %lu gp test poses, GENERATED.", candidates.size(), gp_test_poses.size());
+        std::random_shuffle(candidates.begin(),candidates.end()); // shuffle to select a subset
+        vector<pair<point3d, point3d>> gp_test_poses = candidates;
+        // vector<pair<point3d, point3d>> gp_test_poses = extractCandidateViewPoints(frontier_groups, velo_orig, num_of_samples*2);         
+        // ROS_INFO("%lu candidates, %lu gp test poses, GENERATED.", candidates.size(), gp_test_poses.size());
+        ROS_INFO("Candidate View Points: %luGenereated, %d evaluating...", candidates.size(), num_of_samples_eva);
+        candidates.resize(num_of_samples_eva);
         frontier_groups.clear();
         
         // Evaluate MI for every candidate view points
