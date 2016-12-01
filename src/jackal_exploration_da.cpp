@@ -157,7 +157,7 @@ int main(int argc, char **argv) {
         Frontier_points_cubelist.lifetime = ros::Duration();
 
         unsigned long int t = 0;
-        int l = 0;
+        // int l = 0;
         geometry_msgs::Point q;
         for(vector<vector<point3d>>::size_type n = 0; n < frontier_groups.size(); n++) { 
             for(vector<point3d>::size_type m = 0; m < frontier_groups[n].size(); m++){
@@ -204,7 +204,7 @@ int main(int argc, char **argv) {
             
             // Normalize the MI with distance
             MIs[i] = calc_MI(cur_tree, c.first, hits, before) / 
-                sqrt(pow(c.first.x()-velo_orig.x(),2) + pow(c.first.y()-velo_orig.y(),2));
+                sqrt(sqrt(pow(c.first.x()-velo_orig.x(),2) + pow(c.first.y()-velo_orig.y(),2)));
 
             // Pick the Candidate view point with max MI
             // if (MIs[i] > MIs[max_idx])

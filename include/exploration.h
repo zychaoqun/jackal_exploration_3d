@@ -84,7 +84,7 @@ struct sensorModel {
         }
     }
 }; 
-sensorModel velodynePuck(72, 16, 2*PI, 0.5236, 30.0);
+sensorModel velodynePuck(360, 16, 2*PI, 0.5236, 30.0);
 
 
 double countFreeVolume(const octomap::OcTree *octree) {

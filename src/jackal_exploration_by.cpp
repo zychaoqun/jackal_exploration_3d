@@ -42,11 +42,9 @@ int main(int argc, char **argv) {
 
 
     ros::Subscriber velodyne_sub = nh.subscribe<sensor_msgs::PointCloud2>("/velodyne_points", 1, velodyne_callbacks);
-    // ros::Subscriber hokuyo_sub = nh.subscribe<sensor_msgs::PointCloud2>("/hokuyo_points", 1, hokuyo_callbacks);
     ros::Publisher GoalMarker_pub = nh.advertise<visualization_msgs::Marker>( "Goal_Marker", 1 );
     ros::Publisher JackalMarker_pub = nh.advertise<visualization_msgs::Marker>( "Jackal_Marker", 1 );
     ros::Publisher Candidates_pub = nh.advertise<visualization_msgs::MarkerArray>("Candidate_MIs", 1);
-    // ros::Publisher Octomap_marker_pub = nh.advertise<visualization_msgs::Marker>("Occupied_MarkerArray", 1);
     ros::Publisher Frontier_points_pub = nh.advertise<visualization_msgs::Marker>("Frontier_points", 1);
     ros::Publisher pub_twist = nh.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
     ros::Publisher Octomap_pub = nh.advertise<octomap_msgs::Octomap>("octomap_3d",1);
@@ -57,7 +55,6 @@ int main(int argc, char **argv) {
     tf::Quaternion Goal_heading;
 
     visualization_msgs::MarkerArray CandidatesMarker_array;
-    // visualization_msgs::Marker OctomapOccupied_cubelist;
     visualization_msgs::Marker Frontier_points_cubelist;
 
     geometry_msgs::Twist twist_cmd;
@@ -161,7 +158,7 @@ int main(int argc, char **argv) {
         Frontier_points_cubelist.lifetime = ros::Duration();
 
         unsigned long int t = 0;
-        int l = 0;
+        // int l = 0;
         geometry_msgs::Point q;
         for(vector<vector<point3d>>::size_type n = 0; n < frontier_groups.size(); n++) { 
             for(vector<point3d>::size_type m = 0; m < frontier_groups[n].size(); m++){
@@ -278,7 +275,7 @@ int main(int argc, char **argv) {
         for(int i = 0; i < candidates.size(); i++) {
             auto c = candidates[i];
             MIs[i] = MIs[i] / 
-                sqrt(pow(c.first.x()-velo_orig.x(),2) + pow(c.first.y()-velo_orig.y(),2));
+                sqrt(sqrt(pow(c.first.x()-velo_orig.x(),2) + pow(c.first.y()-velo_orig.y(),2)));
         }
 
         // sort vector MIs, with idx_MI, descending
