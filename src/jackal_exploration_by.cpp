@@ -60,6 +60,7 @@ int main(int argc, char **argv) {
     geometry_msgs::Twist twist_cmd;
     
     ros::Time now_marker = ros::Time::now();
+    double start_time_secs = ros::Time::now().toSec();
    
     double R_velo, P_velo, Y_velo;
     const int num_of_bay = 3;
@@ -107,6 +108,15 @@ int main(int argc, char **argv) {
 
         // Take a Scan
         ros::spinOnce();
+
+        // Publish octomap msg
+        octomap_msgs::binaryMapToMsg(*cur_tree, msg_octomap);
+        msg_octomap.binary = 1;
+        msg_octomap.id = 1;
+        msg_octomap.resolution = octo_reso;
+        msg_octomap.header.frame_id = "/map";
+        msg_octomap.header.stamp = ros::Time::now();
+        Octomap_pub.publish(msg_octomap);
 
         // Rotate another 60 degrees
         twist_cmd.linear.x = twist_cmd.linear.y = twist_cmd.angular.z = 0;
@@ -166,7 +176,6 @@ int main(int argc, char **argv) {
                q.y = frontier_groups[n][m].y();
                q.z = frontier_groups[n][m].z()+octo_reso;
                Frontier_points_cubelist.points.push_back(q); 
-               
             }
             t++;
         }
@@ -207,19 +216,12 @@ int main(int argc, char **argv) {
             octomap::Pointcloud hits = castSensorRays(cur_tree, c.first, Sensor_PrincipalAxis);
             
             // Considering pure MI for decision making
-            MIs[i] = calc_MI(cur_tree, c.first, hits, before);
+            // MIs[i] = calc_MI(cur_tree, c.first, hits, before);
             
             // Normalize the MI with distance
-            // MIs[i] = calc_MI(cur_tree, c.first, hits, before) / 
-            //     sqrt(pow(c.first.x()-velo_orig.x(),2) + pow(c.first.y()-velo_orig.y(),2));
-
-            // Pick the Candidate view point with max MI
-            // if (MIs[i] > MIs[max_idx])
-            // {
-            //     max_idx = i;
-            // }
+            MIs[i] = calc_MI(cur_tree, c.first, hits, before) / 
+                sqrt(pow(c.first.x()-velo_orig.x(),2) + pow(c.first.y()-velo_orig.y(),2));
         }
-
 
         // Bayesian Optimization for actively selecting candidate
         double train_time, test_time;
@@ -227,17 +229,19 @@ int main(int argc, char **argv) {
         for (int bay_itr = 0; bay_itr < num_of_bay; bay_itr++) {
             //Initialize gp regression
             
-            MatrixXf gp_train_x(candidates.size(), 2), gp_train_label(candidates.size(), 1), gp_test_x(gp_test_poses.size(), 2);
+            MatrixXf gp_train_x(candidates.size(), 3), gp_train_label(candidates.size(), 1), gp_test_x(gp_test_poses.size(), 3);
 
             for (int i=0; i< candidates.size(); i++){
                 gp_train_x(i,0) = candidates[i].first.x();
                 gp_train_x(i,1) = candidates[i].first.y();
+                gp_train_x(i,2) = candidates[i].second.yaw();
                 gp_train_label(i) = MIs[i];
             }
 
             for (int i=0; i< gp_test_poses.size(); i++){
                 gp_test_x(i,0) = gp_test_poses[i].first.x();
                 gp_test_x(i,1) = gp_test_poses[i].first.y();
+                gp_test_x(i,2) = gp_test_poses[i].second.yaw();
             }
 
             // Perform GP regression
@@ -272,11 +276,11 @@ int main(int argc, char **argv) {
         ROS_INFO("Mutual Infomation Eva took:  %3.3f Secs.", end_mi_eva_secs - begin_mi_eva_secs);
 
         // Normalize the MI with distance
-        for(int i = 0; i < candidates.size(); i++) {
-            auto c = candidates[i];
-            MIs[i] = MIs[i] / 
-                sqrt(sqrt(pow(c.first.x()-velo_orig.x(),2) + pow(c.first.y()-velo_orig.y(),2)));
-        }
+        // for(int i = 0; i < candidates.size(); i++) {
+        //     auto c = candidates[i];
+        //     MIs[i] = MIs[i] / 
+        //         sqrt(sqrt(pow(c.first.x()-velo_orig.x(),2) + pow(c.first.y()-velo_orig.y(),2)));
+        // }
 
         // sort vector MIs, with idx_MI, descending
         vector<int> idx_MI = sort_MIs(MIs);
@@ -374,7 +378,7 @@ int main(int argc, char **argv) {
                 ROS_INFO("Succeed, new Map Free Volume: %f", countFreeVolume(cur_tree));
                 robot_step_counter++;
 
-                // prepare octomap msg
+                // Publish octomap msg
                 octomap_msgs::binaryMapToMsg(*cur_tree, msg_octomap);
                 msg_octomap.binary = 1;
                 msg_octomap.id = 1;
@@ -385,7 +389,7 @@ int main(int argc, char **argv) {
 
                 // Send out results to file.
                 explo_log_file.open(logfilename, std::ofstream::out | std::ofstream::app);
-                explo_log_file << "BayOpt Step ," << robot_step_counter << ", Current Entropy ," << countFreeVolume(cur_tree) << ", time, " << ros::Time::now().toSec() << endl;
+                explo_log_file << "BayOpt Step ," << robot_step_counter << ", Current Entropy ," << countFreeVolume(cur_tree) << ", time, " << ros::Time::now().toSec() - start_time_secs << endl;
                 explo_log_file.close();
 
             }

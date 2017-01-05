@@ -22,8 +22,8 @@ typedef octomap::point3d point3d;
 typedef pcl::PointXYZ PointType;
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
 const double PI = 3.1415926;
-const double octo_reso = 0.3;
-const int num_of_samples = 12;
+const double octo_reso = 0.2;
+const int num_of_samples = 24;
 const int num_of_samples_eva = 50;
 
 
@@ -40,8 +40,8 @@ std::string octomap_name_2d, octomap_name_3d;
 point3d Sensor_PrincipalAxis(1, 0, 0);
 octomap::OcTreeNode *n;
 octomap::OcTree new_tree(octo_reso);
-point3d bbx_min(-20.0, -20.0, -1.0);
-point3d bbx_max(20.0, 20.0, 30.0);
+point3d bbx_min(-50.0, -50.0, -1.0);
+point3d bbx_max(50.0, 50.0, 50.0);
 
 
 bool got_tf = false;
