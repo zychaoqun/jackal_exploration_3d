@@ -59,6 +59,7 @@ int main(int argc, char **argv) {
     geometry_msgs::Twist twist_cmd;
     
     ros::Time now_marker = ros::Time::now();
+    double start_time_secs = ros::Time::now().toSec();    
    
     double R_velo, P_velo, Y_velo;
 
@@ -105,6 +106,14 @@ int main(int argc, char **argv) {
 
         // Take a Scan
         ros::spinOnce();
+        // Publish octomap msg
+        octomap_msgs::binaryMapToMsg(*cur_tree, msg_octomap);
+        msg_octomap.binary = 1;
+        msg_octomap.id = 1;
+        msg_octomap.resolution = octo_reso;
+        msg_octomap.header.frame_id = "/map";
+        msg_octomap.header.stamp = ros::Time::now();
+        Octomap_pub.publish(msg_octomap);
 
         // Rotate another 60 degrees
         twist_cmd.linear.x = twist_cmd.linear.y = twist_cmd.angular.z = 0;
@@ -323,7 +332,7 @@ int main(int argc, char **argv) {
 
                 // Send out results to file.
                 explo_log_file.open(logfilename, std::ofstream::out | std::ofstream::app);
-                explo_log_file << "DA Step ," << robot_step_counter << ", Current Entropy ," << countFreeVolume(cur_tree) << ", time, " << ros::Time::now().toSec() << endl;
+                explo_log_file << "DA Step ," << robot_step_counter << ", Current Entropy ," << countFreeVolume(cur_tree) << ", time, " << ros::Time::now().toSec() - start_time_secs << endl;
                 explo_log_file.close();
 
             }
